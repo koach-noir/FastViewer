@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { join, appDataDir } from "@tauri-apps/api/path";
 import { SceneInfo, ImageData } from "./types";
 import "./App.css";
 
@@ -57,8 +58,18 @@ function App() {
       setLoading(true);
       setError(null);
 
-      // 環境変数からシーンパスを取得、なければデフォルトパス
-      const scenePath = import.meta.env.VITE_SCENE_PATH || "./test-scenes/my-photos";
+      // パス解決: 開発時と本番時で異なるディレクトリを使用
+      let scenePath: string;
+
+      if (import.meta.env.DEV) {
+        // 開発時: 環境変数または相対パス
+        scenePath = import.meta.env.VITE_SCENE_PATH || "./test-scenes/my-photos";
+      } else {
+        // 本番時: アプリデータディレクトリ配下
+        const appData = await appDataDir();
+        const sceneName = import.meta.env.VITE_SCENE_NAME || "my-photos";
+        scenePath = await join(appData, "scenes", sceneName);
+      }
 
       await invoke("load_scene_collection", { path: scenePath });
 
