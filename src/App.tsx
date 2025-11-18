@@ -57,9 +57,8 @@ function App() {
       setLoading(true);
       setError(null);
 
-      // TODO: Replace with actual scene path from user selection
-      // For now, using a hardcoded path for testing
-      const scenePath = "../FastSlideViewer/scenes-list/scenes-locations";
+      // 環境変数からシーンパスを取得、なければデフォルトパス
+      const scenePath = import.meta.env.VITE_SCENE_PATH || "./test-scenes/my-photos";
 
       await invoke("load_scene_collection", { path: scenePath });
 

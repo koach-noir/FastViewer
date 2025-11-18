@@ -2,8 +2,7 @@ use crate::image_loader::{load_image_cached, image_to_base64_jpeg, ImageCache};
 use crate::scene::{Scene, SceneCollection};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex};  // PathBufを削除
 use tauri::State;
 
 /// Application state shared across commands
@@ -189,41 +188,43 @@ pub async fn get_image(
 /// Navigate to the next page
 #[tauri::command]
 pub async fn next_page(state: State<'_, AppState>) -> Result<ImageData, String> {
-    let scene = state.current_scene.lock().unwrap();
-    let mut page_index = state.current_page_index.lock().unwrap();
-    let scene_index = *state.current_scene_index.lock().unwrap();
+    let (scene_index, new_page) = {
+        let scene = state.current_scene.lock().unwrap();
+        let page_index = state.current_page_index.lock().unwrap();
+        let scene_index = *state.current_scene_index.lock().unwrap();
 
-    if let Some(scene) = scene.as_ref() {
-        let new_page = (*page_index + 1) % scene.page_count();
-        drop(page_index);
-        drop(scene);
+        if let Some(scene) = scene.as_ref() {
+            let new_page = (*page_index + 1) % scene.page_count();
+            (scene_index, new_page)
+        } else {
+            return Err("No scene loaded".to_string());
+        }
+    };
 
-        get_image(Some(scene_index), new_page, state).await
-    } else {
-        Err("No scene loaded".to_string())
-    }
+    get_image(Some(scene_index), new_page, state).await
 }
 
 /// Navigate to the previous page
 #[tauri::command]
 pub async fn prev_page(state: State<'_, AppState>) -> Result<ImageData, String> {
-    let scene = state.current_scene.lock().unwrap();
-    let page_index = state.current_page_index.lock().unwrap();
-    let scene_index = *state.current_scene_index.lock().unwrap();
+    let (scene_index, new_page) = {
+        let scene = state.current_scene.lock().unwrap();
+        let page_index = state.current_page_index.lock().unwrap();
+        let scene_index = *state.current_scene_index.lock().unwrap();
 
-    if let Some(scene) = scene.as_ref() {
-        let new_page = if *page_index == 0 {
-            scene.page_count() - 1
+        if let Some(scene) = scene.as_ref() {
+            let new_page = if *page_index == 0 {
+                scene.page_count() - 1
+            } else {
+                *page_index - 1
+            };
+            (scene_index, new_page)
         } else {
-            *page_index - 1
-        };
-        drop(page_index);
-        drop(scene);
+            return Err("No scene loaded".to_string());
+        }
+    };
 
-        get_image(Some(scene_index), new_page, state).await
-    } else {
-        Err("No scene loaded".to_string())
-    }
+    get_image(Some(scene_index), new_page, state).await
 }
 
 /// Get list of available scene collections
@@ -250,53 +251,51 @@ pub async fn get_scene_list(parent_dir: String) -> Result<Vec<SceneListItem>, St
 /// Navigate to next scene
 #[tauri::command]
 pub async fn next_scene(state: State<'_, AppState>) -> Result<SceneInfo, String> {
-    let collection = state.current_collection.lock().unwrap();
-    let mut scene_index = state.current_scene_index.lock().unwrap();
+    {
+        let collection = state.current_collection.lock().unwrap();
+        let mut scene_index = state.current_scene_index.lock().unwrap();
 
-    if let Some(coll) = collection.as_ref() {
-        let new_index = (*scene_index + 1) % coll.scene_count();
+        if let Some(coll) = collection.as_ref() {
+            let new_index = (*scene_index + 1) % coll.scene_count();
 
-        let scene = coll.load_scene(new_index)
-            .map_err(|e| format!("Failed to load next scene: {}", e))?;
+            let scene = coll.load_scene(new_index)
+                .map_err(|e| format!("Failed to load next scene: {}", e))?;
 
-        *state.current_scene.lock().unwrap() = Some(scene);
-        *scene_index = new_index;
-        *state.current_page_index.lock().unwrap() = 0;
-
-        drop(scene_index);
-        drop(collection);
-
-        get_scene_info(state).await
-    } else {
-        Err("No collection loaded".to_string())
+            *state.current_scene.lock().unwrap() = Some(scene);
+            *scene_index = new_index;
+            *state.current_page_index.lock().unwrap() = 0;
+        } else {
+            return Err("No collection loaded".to_string());
+        }
     }
+
+    get_scene_info(state).await
 }
 
 /// Navigate to previous scene
 #[tauri::command]
 pub async fn prev_scene(state: State<'_, AppState>) -> Result<SceneInfo, String> {
-    let collection = state.current_collection.lock().unwrap();
-    let mut scene_index = state.current_scene_index.lock().unwrap();
+    {
+        let collection = state.current_collection.lock().unwrap();
+        let mut scene_index = state.current_scene_index.lock().unwrap();
 
-    if let Some(coll) = collection.as_ref() {
-        let new_index = if *scene_index == 0 {
-            coll.scene_count() - 1
+        if let Some(coll) = collection.as_ref() {
+            let new_index = if *scene_index == 0 {
+                coll.scene_count() - 1
+            } else {
+                *scene_index - 1
+            };
+
+            let scene = coll.load_scene(new_index)
+                .map_err(|e| format!("Failed to load previous scene: {}", e))?;
+
+            *state.current_scene.lock().unwrap() = Some(scene);
+            *scene_index = new_index;
+            *state.current_page_index.lock().unwrap() = 0;
         } else {
-            *scene_index - 1
-        };
-
-        let scene = coll.load_scene(new_index)
-            .map_err(|e| format!("Failed to load previous scene: {}", e))?;
-
-        *state.current_scene.lock().unwrap() = Some(scene);
-        *scene_index = new_index;
-        *state.current_page_index.lock().unwrap() = 0;
-
-        drop(scene_index);
-        drop(collection);
-
-        get_scene_info(state).await
-    } else {
-        Err("No collection loaded".to_string())
+            return Err("No collection loaded".to_string());
+        }
     }
+
+    get_scene_info(state).await
 }

@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
-use image::DynamicImage;
+use image::{DynamicImage, GenericImageView};  // GenericImageViewを追加
 
 /// Represents an image with both main and thumbnail versions
 #[derive(Clone)]
@@ -82,8 +82,7 @@ pub fn load_image_cached(path: &str, cache: &ImageCache) -> Result<Arc<DynamicIm
 
 /// Convert an image to base64 encoded JPEG
 pub fn image_to_base64_jpeg(img: &DynamicImage, quality: u8) -> Result<String> {
-    use image::ImageFormat;
-    use std::io::Cursor;
+    use std::io::Cursor;  // use image::ImageFormat; を削除
 
     let mut buffer = Cursor::new(Vec::new());
 
@@ -110,8 +109,6 @@ pub fn image_to_base64_png(img: &DynamicImage) -> Result<String> {
 
 /// Simple base64 encoding
 fn base64_encode(data: &[u8]) -> String {
-    use std::fmt::Write;
-
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
     let mut result = String::new();
