@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
 use image::{DynamicImage, GenericImageView};  // GenericImageViewを追加
+use lru::LruCache;
+use std::num::NonZeroUsize;
 
 /// Represents an image with both main and thumbnail versions
 #[derive(Clone)]
@@ -13,17 +14,16 @@ pub struct ImagePair {
     pub thumbnail_image: Option<Arc<DynamicImage>>,
 }
 
-/// Image cache with a maximum capacity
+/// Image cache with LRU eviction policy
 pub struct ImageCache {
-    cache: Arc<Mutex<HashMap<String, Arc<DynamicImage>>>>,
-    max_size: usize,
+    cache: Arc<Mutex<LruCache<String, Arc<DynamicImage>>>>,
 }
 
 impl ImageCache {
     pub fn new(max_size: usize) -> Self {
+        let capacity = NonZeroUsize::new(max_size).unwrap_or(NonZeroUsize::new(8).unwrap());
         ImageCache {
-            cache: Arc::new(Mutex::new(HashMap::new())),
-            max_size,
+            cache: Arc::new(Mutex::new(LruCache::new(capacity))),
         }
     }
 
@@ -35,13 +35,8 @@ impl ImageCache {
     /// Insert an image into the cache
     pub fn insert(&self, path: String, image: Arc<DynamicImage>) {
         let mut cache = self.cache.lock().unwrap();
-
-        // Simple eviction: if cache is full, clear it
-        if cache.len() >= self.max_size {
-            cache.clear();
-        }
-
-        cache.insert(path, image);
+        // LRU automatically evicts least recently used item when full
+        cache.put(path, image);
     }
 
     /// Clear the entire cache
@@ -55,17 +50,16 @@ impl ImageCache {
     }
 }
 
-/// Cache for base64-encoded images
+/// Cache for base64-encoded images with LRU eviction policy
 pub struct EncodedImageCache {
-    cache: Arc<Mutex<HashMap<String, String>>>,
-    max_size: usize,
+    cache: Arc<Mutex<LruCache<String, String>>>,
 }
 
 impl EncodedImageCache {
     pub fn new(max_size: usize) -> Self {
+        let capacity = NonZeroUsize::new(max_size).unwrap_or(NonZeroUsize::new(16).unwrap());
         EncodedImageCache {
-            cache: Arc::new(Mutex::new(HashMap::new())),
-            max_size,
+            cache: Arc::new(Mutex::new(LruCache::new(capacity))),
         }
     }
 
@@ -77,13 +71,8 @@ impl EncodedImageCache {
     /// Insert an encoded image into the cache
     pub fn insert(&self, path: String, encoded: String) {
         let mut cache = self.cache.lock().unwrap();
-
-        // Simple eviction: if cache is full, clear it
-        if cache.len() >= self.max_size {
-            cache.clear();
-        }
-
-        cache.insert(path, encoded);
+        // LRU automatically evicts least recently used item when full
+        cache.put(path, encoded);
     }
 
     /// Clear the entire cache
@@ -105,7 +94,7 @@ pub fn load_image<P: AsRef<Path>>(path: P) -> Result<DynamicImage> {
         .with_context(|| format!("Failed to load image: {:?}", path))
 }
 
-/// Load an image with caching
+/// Load an image with caching and automatic resizing for large images
 pub fn load_image_cached(path: &str, cache: &ImageCache) -> Result<Arc<DynamicImage>> {
     // Check cache first
     if let Some(cached) = cache.get(path) {
@@ -113,7 +102,17 @@ pub fn load_image_cached(path: &str, cache: &ImageCache) -> Result<Arc<DynamicIm
     }
 
     // Load from disk
-    let img = load_image(path)?;
+    let mut img = load_image(path)?;
+
+    // Automatically resize large images to improve performance
+    // Maximum dimension set to 2560px (smaller than 4K for better performance)
+    const MAX_DIMENSION: u32 = 2560;
+    let (width, height) = img.dimensions();
+
+    if width > MAX_DIMENSION || height > MAX_DIMENSION {
+        img = resize_to_fit(&img, MAX_DIMENSION, MAX_DIMENSION);
+    }
+
     let img_arc = Arc::new(img);
 
     // Store in cache
