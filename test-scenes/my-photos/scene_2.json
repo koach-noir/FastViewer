@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": "1.0",
-    "sceneName": "My Photos",
+    "sceneName": "## Animation Test ##",
     "imageSize": {
       "width": 1920,
       "height": 1080
@@ -13,40 +13,25 @@
   },
   "pages": [
     {
-      "image": "/Users/yutakakoach/Desktop/photo/DSC01721.jpeg"
+      "image": "/Users/yutakakoach/output/animation/FastViewer/public/images/Number-01.png"
     },
     {
-      "image": "/Users/yutakakoach/Desktop/photo/DSC04948.jpeg"
+      "image": "/Users/yutakakoach/output/animation/FastViewer/public/images/Number-02.png"
     },
     {
-      "image": "/Users/yutakakoach/Desktop/photo/DSC05808.jpeg"
+      "image": "/Users/yutakakoach/output/animation/FastViewer/public/images/Number-03.png"
     },
     {
-      "image": "/Users/yutakakoach/Desktop/photo/DSC05975.jpeg"
+      "image": "/Users/yutakakoach/output/animation/FastViewer/public/images/Number-04.png"
     },
     {
-      "image": "/Users/yutakakoach/Desktop/photo/IMG_2201.jpeg"
+      "image": "/Users/yutakakoach/output/animation/FastViewer/public/images/Number-05.png"
     },
     {
-      "image": "/Users/yutakakoach/Desktop/photo/DSC05934.jpeg"
+      "image": "/Users/yutakakoach/output/animation/FastViewer/public/images/Number-06.png"
     },
     {
-      "image": "/Users/yutakakoach/Desktop/photo/DSC05918.jpeg"
-    },
-    {
-      "image": "/Users/yutakakoach/Desktop/photo/DSC06047.jpeg"
-    },
-    {
-      "image": "/Users/yutakakoach/Desktop/photo/DSC06107.jpeg"
-    },
-    {
-      "image": "/Users/yutakakoach/Desktop/photo/DSC06170.jpeg"
-    },
-    {
-      "image": "/Users/yutakakoach/Desktop/photo/DSC06208.jpeg"
-    },
-    {
-      "image": "/Users/yutakakoach/Desktop/photo/DSC06191.jpeg"
+      "image": "/Users/yutakakoach/output/animation/FastViewer/public/images/Number-07.png"
     }
   ]
 }
