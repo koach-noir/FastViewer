@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNotification } from "./framework/hooks/useNotification";
 import { Notification } from "./framework/components/Notification";
+import { useAutoPlay } from "./framework/hooks/useAutoPlay";
+import { AutoPlayControls } from "./framework/components/AutoPlayControls";
 import { useImageContent } from "./features/image-viewer/hooks/useImageContent";
 import "./App.css";
 
@@ -19,11 +21,11 @@ function App() {
     handleSceneLoopToggle,
   } = useImageContent();
 
-  // Auto-play state
-  const [autoPlay, setAutoPlay] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1.0); // 0.5x to 3.0x speed
-  const [autoPlayReverse, setAutoPlayReverse] = useState(false); // Auto-play direction toggle
-  const autoPlayPausedUntil = useRef<number>(0); // Timestamp until which auto-play is paused
+  // Auto-play system
+  const autoPlay = useAutoPlay({
+    onNext: handleNextPage,
+    onPrev: handlePrevPage,
+  });
 
   // Display level state (0: image only, 1: +scene name, 2: +page info, 3: +controls)
   const [displayLevel, setDisplayLevel] = useState(0);
@@ -41,34 +43,6 @@ function App() {
   useEffect(() => {
     displayLevelRef.current = displayLevel;
   }, [displayLevel]);
-
-  // Pause auto-play for 1 second when user manually navigates
-  const pauseAutoPlay = useCallback(() => {
-    autoPlayPausedUntil.current = Date.now() + 1000; // Pause for 1 second
-  }, []);
-
-  // Auto play functionality with idling and reverse support
-  useEffect(() => {
-    if (!autoPlay) return;
-
-    const baseInterval = 2400; // 2.4 seconds base interval
-    const interval = setInterval(() => {
-      // Check if auto-play is currently paused
-      if (Date.now() < autoPlayPausedUntil.current) {
-        console.log("Auto-play paused, skipping navigation");
-        return;
-      }
-
-      // Navigate in the appropriate direction
-      if (autoPlayReverse) {
-        handlePrevPage();
-      } else {
-        handleNextPage();
-      }
-    }, baseInterval / playbackSpeed);
-
-    return () => clearInterval(interval);
-  }, [autoPlay, playbackSpeed, autoPlayReverse, handleNextPage, handlePrevPage]);
 
   // Scene change detection: transition from level 0 to level 1
   useEffect(() => {
@@ -199,24 +173,20 @@ function App() {
         case "ArrowLeft":
         case "ArrowUp":
           console.log("Triggering prev page from keyboard");
-          pauseAutoPlay(); // Pause auto-play when user navigates manually
+          autoPlay.pause(1000); // Pause auto-play when user navigates manually
           handlePrevPage();
           break;
         case "ArrowRight":
         case "ArrowDown":
           console.log("Triggering next page from keyboard");
-          pauseAutoPlay(); // Pause auto-play when user navigates manually
+          autoPlay.pause(1000); // Pause auto-play when user navigates manually
           handleNextPage();
           break;
         case " ":
           e.preventDefault();
           console.log("Toggling autoplay");
-          setAutoPlay((prev) => {
-            const newState = !prev;
-            // Show notification for the new state
-            showNotification(newState ? "Auto-play ON" : "Auto-play OFF");
-            return newState;
-          });
+          autoPlay.togglePlay();
+          showNotification(autoPlay.isPlaying ? "Auto-play OFF" : "Auto-play ON");
           break;
         case "Escape":
           // Handle fullscreen exit if implemented
@@ -230,7 +200,7 @@ function App() {
       console.log("Removing keyboard event listener");
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [handleNextPage, handlePrevPage, pauseAutoPlay, showNotification]);
+  }, [handleNextPage, handlePrevPage, autoPlay, showNotification]);
 
   return (
     <div className={`app ${displayLevel === 0 ? "hide-cursor" : ""}`}>
@@ -284,7 +254,7 @@ function App() {
                 className="nav-button"
                 onClick={() => {
                   console.log("Prev Page button clicked");
-                  pauseAutoPlay(); // Pause auto-play when user navigates manually
+                  autoPlay.pause(1000); // Pause auto-play when user navigates manually
                   handlePrevPage();
                 }}
               >
@@ -294,7 +264,7 @@ function App() {
                 className="nav-button"
                 onClick={() => {
                   console.log("Next Page button clicked");
-                  pauseAutoPlay(); // Pause auto-play when user navigates manually
+                  autoPlay.pause(1000); // Pause auto-play when user navigates manually
                   handleNextPage();
                 }}
               >
@@ -306,38 +276,15 @@ function App() {
             </div>
 
             {/* Level 3: Autoplay control */}
-            <div className={`autoplay-control ui-element ${displayLevel >= 3 ? "visible" : ""}`}>
-              <button
-                className={`autoplay-button ${autoPlay ? "active" : ""}`}
-                onClick={() => setAutoPlay((prev) => !prev)}
-              >
-                {autoPlay ? "⏸ Pause" : "▶ Play"}
-              </button>
-              <div className="speed-control">
-                <label htmlFor="speed-slider">
-                  Speed: {playbackSpeed.toFixed(1)}x
-                </label>
-                <input
-                  id="speed-slider"
-                  type="range"
-                  min="0.5"
-                  max="3.0"
-                  step="0.1"
-                  value={playbackSpeed}
-                  onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))}
-                  className="speed-slider"
-                />
-              </div>
-              <div className="direction-control">
-                <button
-                  className={`direction-button ${autoPlayReverse ? "active" : ""}`}
-                  onClick={() => setAutoPlayReverse((prev) => !prev)}
-                  title={autoPlayReverse ? "Direction: Backward (◀)" : "Direction: Forward (▶)"}
-                >
-                  {autoPlayReverse ? "◀ Backward" : "▶ Forward"}
-                </button>
-              </div>
-            </div>
+            <AutoPlayControls
+              isPlaying={autoPlay.isPlaying}
+              speed={autoPlay.speed}
+              reverse={autoPlay.reverse}
+              displayLevel={displayLevel}
+              onTogglePlay={autoPlay.togglePlay}
+              onSetSpeed={autoPlay.setSpeed}
+              onToggleReverse={autoPlay.toggleReverse}
+            />
 
             {/* Level 3: Scene loop toggle */}
             <div className={`scene-loop-control ui-element ${displayLevel >= 3 ? "visible" : ""}`}>
