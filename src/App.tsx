@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { join, appDataDir } from "@tauri-apps/api/path";
 import { SceneInfo, ImageData } from "./types";
 import * as imageService from "./features/image-viewer/services/imageService";
+import { useNotification } from "./framework/hooks/useNotification";
+import { Notification } from "./framework/components/Notification";
 import "./App.css";
 
 function App() {
@@ -25,9 +27,8 @@ function App() {
   const previousSceneIndex = useRef<number | null>(null);
   const lastMouseDownLevel = useRef<{level: number, timestamp: number}>({level: 0, timestamp: 0});
 
-  // Notification system state
-  const [notification, setNotification] = useState<string | null>(null);
-  const notificationTimer = useRef<NodeJS.Timeout | null>(null);
+  // Notification system
+  const { notification, showNotification } = useNotification();
 
   // Keep displayLevelRef in sync with displayLevel state
   useEffect(() => {
@@ -70,22 +71,6 @@ function App() {
   // Pause auto-play for 1 second when user manually navigates
   const pauseAutoPlay = useCallback(() => {
     autoPlayPausedUntil.current = Date.now() + 1000; // Pause for 1 second
-  }, []);
-
-  // Generic notification system - shows a message for a specified duration
-  const showNotification = useCallback((message: string, duration: number = 2000) => {
-    // Clear any existing notification timer
-    if (notificationTimer.current) {
-      clearTimeout(notificationTimer.current);
-    }
-
-    // Show the notification
-    setNotification(message);
-
-    // Auto-dismiss after duration
-    notificationTimer.current = setTimeout(() => {
-      setNotification(null);
-    }, duration);
   }, []);
 
   const handleNextPage = useCallback(async () => {
@@ -499,11 +484,7 @@ function App() {
             </div>
 
             {/* Notification system - shows status messages */}
-            {notification && (
-              <div className="notification">
-                {notification}
-              </div>
-            )}
+            <Notification notification={notification} />
           </>
         )}
       </div>
