@@ -112,8 +112,9 @@ pub fn load_image_cached(path: &str, cache: &ImageCache) -> Result<Arc<DynamicIm
         load_start.elapsed(), original_dimensions.0, original_dimensions.1);
 
     // Automatically resize large images to improve performance
-    // Maximum dimension set to 2560px (smaller than 4K for better performance)
-    const MAX_DIMENSION: u32 = 2560;
+    // Maximum dimension set to 1920px for optimal balance between quality and speed
+    // (Full HD resolution is sufficient for most viewing scenarios)
+    const MAX_DIMENSION: u32 = 1920;
     let (width, height) = img.dimensions();
 
     if width > MAX_DIMENSION || height > MAX_DIMENSION {
@@ -221,7 +222,9 @@ pub fn resize_to_fit(img: &DynamicImage, max_width: u32, max_height: u32) -> Dyn
     let new_width = (width as f32 * ratio) as u32;
     let new_height = (height as f32 * ratio) as u32;
 
-    img.resize(new_width, new_height, image::imageops::FilterType::Lanczos3)
+    // Use Triangle (bilinear) filter for much faster resizing (10-20x faster than Lanczos3)
+    // Quality is still good for downscaling, and speed is critical for large images
+    img.resize(new_width, new_height, image::imageops::FilterType::Triangle)
 }
 
 #[cfg(test)]
