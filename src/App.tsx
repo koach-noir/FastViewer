@@ -25,6 +25,10 @@ function App() {
   const previousSceneIndex = useRef<number | null>(null);
   const lastMouseDownLevel = useRef<{level: number, timestamp: number}>({level: 0, timestamp: 0});
 
+  // Notification system state
+  const [notification, setNotification] = useState<string | null>(null);
+  const notificationTimer = useRef<NodeJS.Timeout | null>(null);
+
   // Keep displayLevelRef in sync with displayLevel state
   useEffect(() => {
     displayLevelRef.current = displayLevel;
@@ -69,6 +73,22 @@ function App() {
   // Pause auto-play for 1 second when user manually navigates
   const pauseAutoPlay = useCallback(() => {
     autoPlayPausedUntil.current = Date.now() + 1000; // Pause for 1 second
+  }, []);
+
+  // Generic notification system - shows a message for a specified duration
+  const showNotification = useCallback((message: string, duration: number = 2000) => {
+    // Clear any existing notification timer
+    if (notificationTimer.current) {
+      clearTimeout(notificationTimer.current);
+    }
+
+    // Show the notification
+    setNotification(message);
+
+    // Auto-dismiss after duration
+    notificationTimer.current = setTimeout(() => {
+      setNotification(null);
+    }, duration);
   }, []);
 
   const handleNextPage = useCallback(async () => {
@@ -318,7 +338,12 @@ function App() {
         case " ":
           e.preventDefault();
           console.log("Toggling autoplay");
-          setAutoPlay((prev) => !prev);
+          setAutoPlay((prev) => {
+            const newState = !prev;
+            // Show notification for the new state
+            showNotification(newState ? "Auto-play ON" : "Auto-play OFF");
+            return newState;
+          });
           break;
         case "Escape":
           // Handle fullscreen exit if implemented
@@ -332,7 +357,7 @@ function App() {
       console.log("Removing keyboard event listener");
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [handleNextPage, handlePrevPage, pauseAutoPlay]);
+  }, [handleNextPage, handlePrevPage, pauseAutoPlay, showNotification]);
 
   const handleNextScene = async () => {
     try {
@@ -481,6 +506,13 @@ function App() {
                 {sceneLoopEnabled ? "🔁 Loop: ON" : "➡️ Loop: OFF"}
               </button>
             </div>
+
+            {/* Notification system - shows status messages */}
+            {notification && (
+              <div className="notification">
+                {notification}
+              </div>
+            )}
           </>
         )}
       </div>
