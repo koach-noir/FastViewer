@@ -100,6 +100,7 @@ pub async fn get_image(
     page_index: usize,
     state: State<'_, AppState>,
 ) -> Result<ImageData, String> {
+    println!("get_image called: scene_index={:?}, page_index={}", scene_index, page_index);
     let mut current_scene_idx = state.current_scene_index.lock().unwrap();
     let collection = state.current_collection.lock().unwrap();
 
@@ -172,15 +173,19 @@ pub async fn get_image(
 
         // Update current page index
         *state.current_page_index.lock().unwrap() = page_index;
+        println!("Updated current_page_index to: {}", page_index);
 
-        Ok(ImageData {
+        let result = ImageData {
             main_image,
             thumbnail_image,
             page_index,
             scene_index: scene_idx,
             image_path: main_path.to_string(),
-        })
+        };
+        println!("Returning ImageData: page_index={}, scene_index={}, path={}", result.page_index, result.scene_index, result.image_path);
+        Ok(result)
     } else {
+        println!("ERROR: No scene loaded in get_image");
         Err("No scene loaded".to_string())
     }
 }
@@ -188,43 +193,59 @@ pub async fn get_image(
 /// Navigate to the next page
 #[tauri::command]
 pub async fn next_page(state: State<'_, AppState>) -> Result<ImageData, String> {
+    println!("=== next_page command called ===");
     let (scene_index, new_page) = {
         let scene = state.current_scene.lock().unwrap();
         let page_index = state.current_page_index.lock().unwrap();
         let scene_index = *state.current_scene_index.lock().unwrap();
 
         if let Some(scene) = scene.as_ref() {
-            let new_page = (*page_index + 1) % scene.page_count();
+            let current_page = *page_index;
+            let total_pages = scene.page_count();
+            let new_page = (current_page + 1) % total_pages;
+            println!("Current page: {}, Total pages: {}, New page: {}", current_page, total_pages, new_page);
             (scene_index, new_page)
         } else {
+            println!("ERROR: No scene loaded");
             return Err("No scene loaded".to_string());
         }
     };
 
-    get_image(Some(scene_index), new_page, state).await
+    println!("Calling get_image with scene_index: {}, page: {}", scene_index, new_page);
+    let result = get_image(Some(scene_index), new_page, state).await;
+    println!("=== next_page command completed ===");
+    result
 }
 
 /// Navigate to the previous page
 #[tauri::command]
 pub async fn prev_page(state: State<'_, AppState>) -> Result<ImageData, String> {
+    println!("=== prev_page command called ===");
     let (scene_index, new_page) = {
         let scene = state.current_scene.lock().unwrap();
         let page_index = state.current_page_index.lock().unwrap();
         let scene_index = *state.current_scene_index.lock().unwrap();
 
         if let Some(scene) = scene.as_ref() {
-            let new_page = if *page_index == 0 {
-                scene.page_count() - 1
+            let current_page = *page_index;
+            let total_pages = scene.page_count();
+            let new_page = if current_page == 0 {
+                total_pages - 1
             } else {
-                *page_index - 1
+                current_page - 1
             };
+            println!("Current page: {}, Total pages: {}, New page: {}", current_page, total_pages, new_page);
             (scene_index, new_page)
         } else {
+            println!("ERROR: No scene loaded");
             return Err("No scene loaded".to_string());
         }
     };
 
-    get_image(Some(scene_index), new_page, state).await
+    println!("Calling get_image with scene_index: {}, page: {}", scene_index, new_page);
+    let result = get_image(Some(scene_index), new_page, state).await;
+    println!("=== prev_page command completed ===");
+    result
 }
 
 /// Get list of available scene collections

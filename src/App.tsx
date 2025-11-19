@@ -48,24 +48,36 @@ function App() {
   }, []);
 
   const handleNextPage = useCallback(async () => {
+    console.log("=== handleNextPage called ===");
     try {
+      console.log("Invoking next_page command...");
       const data = await invoke<ImageData>("next_page");
+      console.log("next_page response:", data);
       setImageData(data);
 
+      console.log("Getting scene info...");
       const info = await invoke<SceneInfo>("get_scene_info");
+      console.log("Scene info:", info);
       setSceneInfo(info);
+      console.log("=== handleNextPage completed ===");
     } catch (err) {
       console.error("Failed to navigate to next page:", err);
     }
   }, []);
 
   const handlePrevPage = useCallback(async () => {
+    console.log("=== handlePrevPage called ===");
     try {
+      console.log("Invoking prev_page command...");
       const data = await invoke<ImageData>("prev_page");
+      console.log("prev_page response:", data);
       setImageData(data);
 
+      console.log("Getting scene info...");
       const info = await invoke<SceneInfo>("get_scene_info");
+      console.log("Scene info:", info);
       setSceneInfo(info);
+      console.log("=== handlePrevPage completed ===");
     } catch (err) {
       console.error("Failed to navigate to previous page:", err);
     }
@@ -90,17 +102,21 @@ function App() {
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      console.log("Key pressed:", e.key);
       switch (e.key) {
         case "ArrowLeft":
         case "ArrowUp":
+          console.log("Triggering prev page from keyboard");
           handlePrevPage();
           break;
         case "ArrowRight":
         case "ArrowDown":
+          console.log("Triggering next page from keyboard");
           handleNextPage();
           break;
         case " ":
           e.preventDefault();
+          console.log("Toggling autoplay");
           setAutoPlay((prev) => !prev);
           break;
         case "Escape":
@@ -109,8 +125,12 @@ function App() {
       }
     };
 
+    console.log("Setting up keyboard event listener");
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      console.log("Removing keyboard event listener");
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [handleNextPage, handlePrevPage]);
 
   const handleNextScene = async () => {
@@ -185,10 +205,22 @@ function App() {
               <button className="nav-button" onClick={handlePrevScene}>
                 &lt;&lt; Prev Scene
               </button>
-              <button className="nav-button" onClick={handlePrevPage}>
+              <button
+                className="nav-button"
+                onClick={() => {
+                  console.log("Prev Page button clicked");
+                  handlePrevPage();
+                }}
+              >
                 &lt; Prev
               </button>
-              <button className="nav-button" onClick={handleNextPage}>
+              <button
+                className="nav-button"
+                onClick={() => {
+                  console.log("Next Page button clicked");
+                  handleNextPage();
+                }}
+              >
                 Next &gt;
               </button>
               <button className="nav-button" onClick={handleNextScene}>
