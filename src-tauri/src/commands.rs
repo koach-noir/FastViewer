@@ -69,6 +69,15 @@ pub async fn load_scene_collection(
         *state.current_collection.lock().unwrap() = Some(collection);
         *state.current_scene_index.lock().unwrap() = 0;
         *state.current_page_index.lock().unwrap() = 0;
+
+        // Preload initial images in background
+        let cache = state.cache.clone();
+        let current_scene = state.current_scene.clone();
+        let current_page_index = state.current_page_index.clone();
+
+        tokio::spawn(async move {
+            let _ = preload_next_images_task(cache, current_scene, current_page_index, 3).await;
+        });
     }
 
     Ok(format!("Loaded {} scenes", scene_count))
@@ -212,7 +221,20 @@ pub async fn next_page(state: State<'_, AppState>) -> Result<ImageData, String> 
     };
 
     println!("Calling get_image with scene_index: {}, page: {}", scene_index, new_page);
-    let result = get_image(Some(scene_index), new_page, state).await;
+    let result = get_image(Some(scene_index), new_page, state.clone()).await;
+
+    // Preload next images in background (don't wait for completion)
+    if result.is_ok() {
+        // Clone the Arcs needed for background task
+        let cache = state.cache.clone();
+        let current_scene = state.current_scene.clone();
+        let current_page_index = state.current_page_index.clone();
+
+        tokio::spawn(async move {
+            let _ = preload_next_images_task(cache, current_scene, current_page_index, 3).await;
+        });
+    }
+
     println!("=== next_page command completed ===");
     result
 }
@@ -243,9 +265,69 @@ pub async fn prev_page(state: State<'_, AppState>) -> Result<ImageData, String> 
     };
 
     println!("Calling get_image with scene_index: {}, page: {}", scene_index, new_page);
-    let result = get_image(Some(scene_index), new_page, state).await;
+    let result = get_image(Some(scene_index), new_page, state.clone()).await;
+
+    // Preload next images in background (don't wait for completion)
+    if result.is_ok() {
+        // Clone the Arcs needed for background task
+        let cache = state.cache.clone();
+        let current_scene = state.current_scene.clone();
+        let current_page_index = state.current_page_index.clone();
+
+        tokio::spawn(async move {
+            let _ = preload_next_images_task(cache, current_scene, current_page_index, 3).await;
+        });
+    }
+
     println!("=== prev_page command completed ===");
     result
+}
+
+/// Background task to preload next images
+async fn preload_next_images_task(
+    cache: Arc<ImageCache>,
+    current_scene: Arc<Mutex<Option<Scene>>>,
+    current_page_index: Arc<Mutex<usize>>,
+    count: usize,
+) -> Result<(), String> {
+    println!("=== Preloading next {} images ===", count);
+
+    let scene_guard = current_scene.lock().unwrap();
+    let page_index = *current_page_index.lock().unwrap();
+
+    if let Some(scene) = scene_guard.as_ref() {
+        let total_pages = scene.page_count();
+
+        // Get paths to preload
+        let mut paths_to_load = Vec::new();
+        for i in 1..=count {
+            let next_page = (page_index + i) % total_pages;
+            if let Some(path) = scene.get_page_image(next_page) {
+                paths_to_load.push(path.to_string());
+
+                // Also get thumbnail path
+                let thumb_path = scene.get_thumbnail_path(path);
+                if thumb_path.exists() {
+                    if let Some(thumb_str) = thumb_path.to_str() {
+                        paths_to_load.push(thumb_str.to_string());
+                    }
+                }
+            }
+        }
+
+        drop(scene_guard); // Release lock before loading operations
+
+        // Load images into cache
+        for path in paths_to_load {
+            match load_image_cached(&path, &cache) {
+                Ok(_) => println!("Preloaded: {}", path),
+                Err(e) => eprintln!("Failed to preload {}: {}", path, e),
+            }
+        }
+        println!("=== Preloading completed ===");
+    }
+
+    Ok(())
 }
 
 /// Get list of available scene collections
