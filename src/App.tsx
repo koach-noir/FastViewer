@@ -219,10 +219,39 @@ function App() {
       }, 3000);
     };
 
+    const handleMouseDown = () => {
+      // Always clear idle timer
+      if (mouseIdleTimer.current) {
+        clearTimeout(mouseIdleTimer.current);
+      }
+
+      // Jump directly to level 3 if at level 0
+      if (displayLevelRef.current === 0) {
+        // Clear progression timers
+        if (level2Timer.current) {
+          clearTimeout(level2Timer.current);
+        }
+        if (level3Timer.current) {
+          clearTimeout(level3Timer.current);
+        }
+
+        // Jump immediately to level 3 (all controls)
+        setDisplayLevel(3);
+      }
+      // If already at level 1+, don't change level (just reset idle timer)
+
+      // Set idle timer to return to level 0 after 3s
+      mouseIdleTimer.current = setTimeout(() => {
+        setDisplayLevel(0);
+      }, 3000);
+    };
+
     window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mousedown", handleMouseDown);
 
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mousedown", handleMouseDown);
       if (mouseIdleTimer.current) {
         clearTimeout(mouseIdleTimer.current);
       }
