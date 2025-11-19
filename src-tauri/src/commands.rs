@@ -1,9 +1,9 @@
-use crate::image_loader::{load_image_cached, image_to_base64_jpeg, ImageCache, EncodedImageCache};
+use crate::image_loader::{load_image_cached, load_image_cached_with_size, image_to_base64_jpeg, ImageCache, EncodedImageCache};
 use crate::scene::{Scene, SceneCollection};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};  // PathBufを削除
-use tauri::State;
+use tauri::{State, AppHandle, Manager};
 use futures::future::join_all;
 
 /// Application state shared across commands
@@ -39,10 +39,19 @@ pub struct SceneInfo {
     pub current_page: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImageData {
     pub main_image: Option<String>,
     pub thumbnail_image: Option<String>,
+    pub page_index: usize,
+    pub scene_index: usize,
+    pub image_path: String,
+    pub is_preview: bool,  // true if low-res preview, false if full resolution
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ImageUpgradeEvent {
+    pub main_image: String,
     pub page_index: usize,
     pub scene_index: usize,
     pub image_path: String,
@@ -108,12 +117,13 @@ pub async fn get_scene_info(state: State<'_, AppState>) -> Result<SceneInfo, Str
     }
 }
 
-/// Get an image at a specific page
+/// Get an image at a specific page with progressive loading
 #[tauri::command]
 pub async fn get_image(
     scene_index: Option<usize>,
     page_index: usize,
     state: State<'_, AppState>,
+    app: AppHandle,
 ) -> Result<ImageData, String> {
     println!("get_image called: scene_index={:?}, page_index={}", scene_index, page_index);
     let mut current_scene_idx = state.current_scene_index.lock().unwrap();
@@ -152,43 +162,93 @@ pub async fn get_image(
 
         let thumbnail_path = scene.get_thumbnail_path(main_path);
 
-        // Load main image - check encoded cache first
-        println!("Loading main image: {}", main_path);
+        // Progressive loading: check for high-res cache first
+        println!("🔍 Loading main image: {}", main_path);
         let start = std::time::Instant::now();
 
-        let main_image = if let Some(cached) = state.encoded_cache.get(main_path) {
-            println!("✓ Main image loaded from encoded cache in {:?}", start.elapsed());
-            Some(cached)
-        } else {
-            println!("Cache miss, loading from disk...");
-            let load_start = std::time::Instant::now();
-            match load_image_cached(main_path, &state.cache) {
-                Ok(img) => {
-                    println!("✓ Image decoded in {:?}, dimensions: {}x{}",
-                        load_start.elapsed(), img.width(), img.height());
+        let highres_cache_key = format!("{}@1920", main_path);
+        let is_preview: bool;
+        let main_image: Option<String>;
 
-                    let encode_start = std::time::Instant::now();
-                    match image_to_base64_jpeg(&img, 85) {
+        if let Some(cached) = state.encoded_cache.get(&highres_cache_key) {
+            // High-res version already cached - return immediately
+            println!("✓ High-res image loaded from cache in {:?}", start.elapsed());
+            main_image = Some(cached);
+            is_preview = false;
+        } else {
+            // Load low-res preview (640px) immediately for fast display
+            println!("📸 Loading preview (640px) for instant display...");
+            let preview_start = std::time::Instant::now();
+
+            match load_image_cached_with_size(main_path, &state.cache, 640) {
+                Ok(img) => {
+                    println!("✓ Preview decoded in {:?}, dimensions: {}x{}",
+                        preview_start.elapsed(), img.width(), img.height());
+
+                    match image_to_base64_jpeg(&img, 75) {
                         Ok(base64) => {
-                            println!("✓ Image encoded to base64 in {:?}, size: {} bytes",
-                                encode_start.elapsed(), base64.len());
-                            // Store in encoded cache for future use
-                            state.encoded_cache.insert(main_path.to_string(), base64.clone());
-                            println!("✓ Total loading time: {:?}", start.elapsed());
-                            Some(base64)
+                            println!("✓ Preview encoded in {:?}, size: {} bytes",
+                                preview_start.elapsed(), base64.len());
+                            main_image = Some(base64);
+                            is_preview = true;
+
+                            // Spawn background task to load high-res version
+                            let path_clone = main_path.to_string();
+                            let cache_clone = state.cache.clone();
+                            let encoded_cache_clone = state.encoded_cache.clone();
+                            let app_clone = app.clone();
+
+                            tokio::spawn(async move {
+                                println!("🚀 Background: Loading high-res version (1920px)...");
+                                let highres_start = std::time::Instant::now();
+
+                                match load_image_cached_with_size(&path_clone, &cache_clone, 1920) {
+                                    Ok(img) => {
+                                        println!("✓ High-res decoded in {:?}, dimensions: {}x{}",
+                                            highres_start.elapsed(), img.width(), img.height());
+
+                                        match image_to_base64_jpeg(&img, 85) {
+                                            Ok(base64) => {
+                                                println!("✓ High-res encoded in {:?}, size: {} bytes",
+                                                    highres_start.elapsed(), base64.len());
+
+                                                // Store in encoded cache
+                                                let highres_key = format!("{}@1920", path_clone);
+                                                encoded_cache_clone.insert(highres_key, base64.clone());
+
+                                                // Emit event to frontend
+                                                let upgrade_event = ImageUpgradeEvent {
+                                                    main_image: base64,
+                                                    page_index,
+                                                    scene_index: scene_idx,
+                                                    image_path: path_clone.clone(),
+                                                };
+
+                                                if let Err(e) = app_clone.emit("image-upgraded", upgrade_event) {
+                                                    eprintln!("Failed to emit image-upgraded event: {}", e);
+                                                }
+
+                                                println!("✅ High-res upgrade completed for {}", path_clone);
+                                            }
+                                            Err(e) => eprintln!("✗ Background: Failed to encode high-res: {}", e),
+                                        }
+                                    }
+                                    Err(e) => eprintln!("✗ Background: Failed to load high-res: {}", e),
+                                }
+                            });
                         }
                         Err(e) => {
-                            eprintln!("✗ Failed to encode main image {}: {}", main_path, e);
-                            return Err(format!("Failed to encode image: {}", e));
+                            eprintln!("✗ Failed to encode preview: {}", e);
+                            return Err(format!("Failed to encode preview image: {}", e));
                         }
                     }
-                },
+                }
                 Err(e) => {
-                    eprintln!("✗ Failed to load main image {}: {}", main_path, e);
-                    return Err(format!("Failed to load image: {}", e));
+                    eprintln!("✗ Failed to load preview: {}", e);
+                    return Err(format!("Failed to load preview image: {}", e));
                 }
             }
-        };
+        }
 
         // Load thumbnail if it exists - check encoded cache first
         let thumbnail_image = if thumbnail_path.exists() {
@@ -235,8 +295,10 @@ pub async fn get_image(
             page_index,
             scene_index: scene_idx,
             image_path: main_path.to_string(),
+            is_preview,
         };
-        println!("Returning ImageData: page_index={}, scene_index={}, path={}", result.page_index, result.scene_index, result.image_path);
+        println!("Returning ImageData: page_index={}, scene_index={}, path={}, is_preview={}",
+            result.page_index, result.scene_index, result.image_path, result.is_preview);
         Ok(result)
     } else {
         println!("ERROR: No scene loaded in get_image");
@@ -246,7 +308,7 @@ pub async fn get_image(
 
 /// Navigate to the next page
 #[tauri::command]
-pub async fn next_page(state: State<'_, AppState>) -> Result<ImageData, String> {
+pub async fn next_page(state: State<'_, AppState>, app: AppHandle) -> Result<ImageData, String> {
     println!("=== next_page command called ===");
     let scene_loop_enabled = *state.scene_loop_enabled.lock().unwrap();
 
@@ -302,7 +364,7 @@ pub async fn next_page(state: State<'_, AppState>) -> Result<ImageData, String> 
     }
 
     println!("Calling get_image with scene_index: {}, page: {}", scene_index, new_page);
-    let result = get_image(Some(scene_index), new_page, state.clone()).await;
+    let result = get_image(Some(scene_index), new_page, state.clone(), app).await;
 
     // Preload next images in background (don't wait for completion)
     if result.is_ok() {
@@ -323,7 +385,7 @@ pub async fn next_page(state: State<'_, AppState>) -> Result<ImageData, String> 
 
 /// Navigate to the previous page
 #[tauri::command]
-pub async fn prev_page(state: State<'_, AppState>) -> Result<ImageData, String> {
+pub async fn prev_page(state: State<'_, AppState>, app: AppHandle) -> Result<ImageData, String> {
     println!("=== prev_page command called ===");
     let scene_loop_enabled = *state.scene_loop_enabled.lock().unwrap();
 
@@ -392,7 +454,7 @@ pub async fn prev_page(state: State<'_, AppState>) -> Result<ImageData, String> 
     }
 
     println!("Calling get_image with scene_index: {}, page: {}", scene_index, final_page);
-    let result = get_image(Some(scene_index), final_page, state.clone()).await;
+    let result = get_image(Some(scene_index), final_page, state.clone(), app).await;
 
     // Preload next images in background (don't wait for completion)
     if result.is_ok() {

@@ -11,6 +11,7 @@ export interface SceneInfo {
     page_index: number;
     scene_index: number;
     image_path: string;
+    is_preview: boolean; // true if low-res preview, false if full resolution
   }
   
   export interface SceneListItem {

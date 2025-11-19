@@ -1,7 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { join, appDataDir } from "@tauri-apps/api/path";
+import { listen } from "@tauri-apps/api/event";
 import { ImageData, SceneInfo } from "../types";
 import * as imageService from "../services/imageService";
+
+interface ImageUpgradePayload {
+  main_image: string;
+  page_index: number;
+  scene_index: number;
+  image_path: string;
+}
 
 export interface UseImageContentReturn {
   imageData: ImageData | null;
@@ -166,6 +174,44 @@ export function useImageContent(): UseImageContentReturn {
     };
     loadSceneLoopState();
   }, []);
+
+  // Listen for high-resolution image upgrades
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+
+    const setupListener = async () => {
+      unlisten = await listen<ImageUpgradePayload>("image-upgraded", (event) => {
+        const payload = event.payload;
+        console.log("🎉 High-res image upgrade received:", {
+          page: payload.page_index,
+          scene: payload.scene_index,
+          path: payload.image_path,
+        });
+
+        // Only upgrade if it matches the current page
+        if (
+          imageData &&
+          imageData.page_index === payload.page_index &&
+          imageData.scene_index === payload.scene_index
+        ) {
+          console.log("✅ Upgrading current page to high-res");
+          setImageData({
+            ...imageData,
+            main_image: payload.main_image,
+            is_preview: false, // Mark as full resolution
+          });
+        } else {
+          console.log("ℹ️ Image upgrade is for a different page, cached for future use");
+        }
+      });
+    };
+
+    setupListener();
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [imageData]);
 
   return {
     imageData,

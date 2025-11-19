@@ -96,13 +96,21 @@ pub fn load_image<P: AsRef<Path>>(path: P) -> Result<DynamicImage> {
 
 /// Load an image with caching and automatic resizing for large images
 pub fn load_image_cached(path: &str, cache: &ImageCache) -> Result<Arc<DynamicImage>> {
+    load_image_cached_with_size(path, cache, 1920)
+}
+
+/// Load an image with specific max dimension for progressive loading
+pub fn load_image_cached_with_size(path: &str, cache: &ImageCache, max_dimension: u32) -> Result<Arc<DynamicImage>> {
+    // Create cache key with resolution suffix
+    let cache_key = format!("{}@{}", path, max_dimension);
+
     // Check cache first
-    if let Some(cached) = cache.get(path) {
-        println!("  [ImageCache] Cache hit for: {}", path);
+    if let Some(cached) = cache.get(&cache_key) {
+        println!("  [ImageCache] Cache hit for: {} ({}px)", path, max_dimension);
         return Ok(cached);
     }
 
-    println!("  [ImageCache] Cache miss, loading from disk: {}", path);
+    println!("  [ImageCache] Cache miss, loading from disk: {} (target: {}px)", path, max_dimension);
     let load_start = std::time::Instant::now();
 
     // Load from disk
@@ -111,29 +119,26 @@ pub fn load_image_cached(path: &str, cache: &ImageCache) -> Result<Arc<DynamicIm
     println!("  [ImageCache] Loaded in {:?}, original size: {}x{}",
         load_start.elapsed(), original_dimensions.0, original_dimensions.1);
 
-    // Automatically resize large images to improve performance
-    // Maximum dimension set to 1920px for optimal balance between quality and speed
-    // (Full HD resolution is sufficient for most viewing scenarios)
-    const MAX_DIMENSION: u32 = 1920;
+    // Resize if needed
     let (width, height) = img.dimensions();
 
-    if width > MAX_DIMENSION || height > MAX_DIMENSION {
+    if width > max_dimension || height > max_dimension {
         let resize_start = std::time::Instant::now();
-        img = resize_to_fit(&img, MAX_DIMENSION, MAX_DIMENSION);
+        img = resize_to_fit(&img, max_dimension, max_dimension);
         let new_dimensions = img.dimensions();
         println!("  [ImageCache] Resized from {}x{} to {}x{} in {:?}",
             original_dimensions.0, original_dimensions.1,
             new_dimensions.0, new_dimensions.1,
             resize_start.elapsed());
     } else {
-        println!("  [ImageCache] No resize needed (within {}px)", MAX_DIMENSION);
+        println!("  [ImageCache] No resize needed (within {}px)", max_dimension);
     }
 
     let img_arc = Arc::new(img);
 
-    // Store in cache
-    cache.insert(path.to_string(), img_arc.clone());
-    println!("  [ImageCache] Stored in cache, total time: {:?}", load_start.elapsed());
+    // Store in cache with resolution-specific key
+    cache.insert(cache_key, img_arc.clone());
+    println!("  [ImageCache] Stored in cache ({}px), total time: {:?}", max_dimension, load_start.elapsed());
 
     Ok(img_arc)
 }
