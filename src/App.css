@@ -80,6 +80,14 @@ body, html, #root {
   font-size: 16px;
   pointer-events: none;
   z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.scene-total-pages {
+  font-size: 14px;
+  opacity: 0.9;
 }
 
 /* Navigation Controls */
@@ -300,7 +308,7 @@ body, html, #root {
 /* Scene Loop Control */
 .scene-loop-control {
   position: absolute;
-  top: 130px;
+  top: 220px;
   right: 20px;
   display: flex;
   gap: 10px;
@@ -336,16 +344,14 @@ body, html, #root {
   cursor: none !important;
 }
 
-/* Fade-in animation for display level transitions */
-.fade-in {
-  animation: fadeIn 0.3s ease-in;
+/* UI element visibility with fade transitions */
+.ui-element {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease-in-out;
 }
 
-@keyframes fadeIn {
-  0% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 1;
-  }
+.ui-element.visible {
+  opacity: 1;
+  pointer-events: auto;
 }

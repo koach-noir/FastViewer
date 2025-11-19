@@ -387,116 +387,100 @@ function App() {
 
             {sceneInfo && (
               <>
-                {/* Level 1+: Scene name */}
-                {displayLevel >= 1 && (
-                  <div className="scene-info fade-in">
-                    <div>{sceneInfo.scene_name}</div>
+                {/* Level 1+: Scene info (name + total pages at level 2+) */}
+                <div className={`scene-info ui-element ${displayLevel >= 1 ? "visible" : ""}`}>
+                  <div>{sceneInfo.scene_name}</div>
+                  <div className={`scene-total-pages ui-element ${displayLevel >= 2 ? "visible" : ""}`}>
+                    Total Pages: {sceneInfo.total_pages}
                   </div>
-                )}
+                </div>
 
                 {/* Level 2+: Page number */}
-                {displayLevel >= 2 && (
-                  <div className="info-overlay fade-in">
-                    Page {sceneInfo.current_page + 1}
-                  </div>
-                )}
-
-                {/* Level 2+: Total pages */}
-                {displayLevel >= 2 && (
-                  <div className="scene-info fade-in">
-                    <div>Total Pages: {sceneInfo.total_pages}</div>
-                  </div>
-                )}
+                <div className={`info-overlay ui-element ${displayLevel >= 2 ? "visible" : ""}`}>
+                  Page {sceneInfo.current_page + 1}
+                </div>
 
                 {/* Level 2+: Image filename */}
-                {displayLevel >= 2 && (
-                  <div className="page-info fade-in">
-                    {imageData.image_path.split(/[/\\]/).pop()}
-                  </div>
-                )}
+                <div className={`page-info ui-element ${displayLevel >= 2 ? "visible" : ""}`}>
+                  {imageData.image_path.split(/[/\\]/).pop()}
+                </div>
               </>
             )}
 
             {/* Level 3: Navigation controls */}
-            {displayLevel >= 3 && (
-              <div className="navigation-controls fade-in">
-                <button className="nav-button" onClick={handlePrevScene}>
-                  &lt;&lt; Prev Scene
-                </button>
-                <button
-                  className="nav-button"
-                  onClick={() => {
-                    console.log("Prev Page button clicked");
-                    pauseAutoPlay(); // Pause auto-play when user navigates manually
-                    handlePrevPage();
-                  }}
-                >
-                  &lt; Prev
-                </button>
-                <button
-                  className="nav-button"
-                  onClick={() => {
-                    console.log("Next Page button clicked");
-                    pauseAutoPlay(); // Pause auto-play when user navigates manually
-                    handleNextPage();
-                  }}
-                >
-                  Next &gt;
-                </button>
-                <button className="nav-button" onClick={handleNextScene}>
-                  Next Scene &gt;&gt;
-                </button>
-              </div>
-            )}
+            <div className={`navigation-controls ui-element ${displayLevel >= 3 ? "visible" : ""}`}>
+              <button className="nav-button" onClick={handlePrevScene}>
+                &lt;&lt; Prev Scene
+              </button>
+              <button
+                className="nav-button"
+                onClick={() => {
+                  console.log("Prev Page button clicked");
+                  pauseAutoPlay(); // Pause auto-play when user navigates manually
+                  handlePrevPage();
+                }}
+              >
+                &lt; Prev
+              </button>
+              <button
+                className="nav-button"
+                onClick={() => {
+                  console.log("Next Page button clicked");
+                  pauseAutoPlay(); // Pause auto-play when user navigates manually
+                  handleNextPage();
+                }}
+              >
+                Next &gt;
+              </button>
+              <button className="nav-button" onClick={handleNextScene}>
+                Next Scene &gt;&gt;
+              </button>
+            </div>
 
             {/* Level 3: Autoplay control */}
-            {displayLevel >= 3 && (
-              <div className="autoplay-control fade-in">
-                <button
-                  className={`autoplay-button ${autoPlay ? "active" : ""}`}
-                  onClick={() => setAutoPlay((prev) => !prev)}
-                >
-                  {autoPlay ? "⏸ Pause" : "▶ Play"}
-                </button>
-                <div className="speed-control">
-                  <label htmlFor="speed-slider">
-                    Speed: {playbackSpeed.toFixed(1)}x
-                  </label>
-                  <input
-                    id="speed-slider"
-                    type="range"
-                    min="0.5"
-                    max="3.0"
-                    step="0.1"
-                    value={playbackSpeed}
-                    onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))}
-                    className="speed-slider"
-                  />
-                </div>
-                <div className="direction-control">
-                  <button
-                    className={`direction-button ${autoPlayReverse ? "active" : ""}`}
-                    onClick={() => setAutoPlayReverse((prev) => !prev)}
-                    title={autoPlayReverse ? "Direction: Backward (◀)" : "Direction: Forward (▶)"}
-                  >
-                    {autoPlayReverse ? "◀ Backward" : "▶ Forward"}
-                  </button>
-                </div>
+            <div className={`autoplay-control ui-element ${displayLevel >= 3 ? "visible" : ""}`}>
+              <button
+                className={`autoplay-button ${autoPlay ? "active" : ""}`}
+                onClick={() => setAutoPlay((prev) => !prev)}
+              >
+                {autoPlay ? "⏸ Pause" : "▶ Play"}
+              </button>
+              <div className="speed-control">
+                <label htmlFor="speed-slider">
+                  Speed: {playbackSpeed.toFixed(1)}x
+                </label>
+                <input
+                  id="speed-slider"
+                  type="range"
+                  min="0.5"
+                  max="3.0"
+                  step="0.1"
+                  value={playbackSpeed}
+                  onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))}
+                  className="speed-slider"
+                />
               </div>
-            )}
+              <div className="direction-control">
+                <button
+                  className={`direction-button ${autoPlayReverse ? "active" : ""}`}
+                  onClick={() => setAutoPlayReverse((prev) => !prev)}
+                  title={autoPlayReverse ? "Direction: Backward (◀)" : "Direction: Forward (▶)"}
+                >
+                  {autoPlayReverse ? "◀ Backward" : "▶ Forward"}
+                </button>
+              </div>
+            </div>
 
             {/* Level 3: Scene loop toggle */}
-            {displayLevel >= 3 && (
-              <div className="scene-loop-control fade-in">
-                <button
-                  className={`scene-loop-button ${sceneLoopEnabled ? "active" : ""}`}
-                  onClick={handleSceneLoopToggle}
-                  title={sceneLoopEnabled ? "Scene Loop: ON (stays within scene)" : "Scene Loop: OFF (transitions between scenes)"}
-                >
-                  {sceneLoopEnabled ? "🔁 Loop: ON" : "➡️ Loop: OFF"}
-                </button>
-              </div>
-            )}
+            <div className={`scene-loop-control ui-element ${displayLevel >= 3 ? "visible" : ""}`}>
+              <button
+                className={`scene-loop-button ${sceneLoopEnabled ? "active" : ""}`}
+                onClick={handleSceneLoopToggle}
+                title={sceneLoopEnabled ? "Scene Loop: ON (stays within scene)" : "Scene Loop: OFF (transitions between scenes)"}
+              >
+                {sceneLoopEnabled ? "🔁 Loop: ON" : "➡️ Loop: OFF"}
+              </button>
+            </div>
           </>
         )}
       </div>
