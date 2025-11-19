@@ -23,6 +23,7 @@ function App() {
   const level2Timer = useRef<NodeJS.Timeout | null>(null);
   const level3Timer = useRef<NodeJS.Timeout | null>(null);
   const previousSceneIndex = useRef<number | null>(null);
+  const lastMouseDownLevel = useRef<{level: number, timestamp: number}>({level: 0, timestamp: 0});
 
   // Keep displayLevelRef in sync with displayLevel state
   useEffect(() => {
@@ -182,8 +183,15 @@ function App() {
       // Check if scene has changed
       if (previousSceneIndex.current !== null &&
           previousSceneIndex.current !== sceneInfo.scene_index) {
+        // Check if the scene change happened shortly after a mouse down (within 500ms)
+        // If so, use the display level before the mouse down to determine transition
+        const timeSinceMouseDown = Date.now() - lastMouseDownLevel.current.timestamp;
+        const levelToCheck = timeSinceMouseDown < 500
+          ? lastMouseDownLevel.current.level
+          : displayLevel;
+
         // Scene changed - if at level 0, transition to level 1
-        if (displayLevel === 0) {
+        if (levelToCheck === 0) {
           setDisplayLevel(1);
 
           // Set idle timer to return to level 0 after 3s
@@ -240,6 +248,12 @@ function App() {
     };
 
     const handleMouseDown = () => {
+      // Record display level and timestamp before any change
+      lastMouseDownLevel.current = {
+        level: displayLevelRef.current,
+        timestamp: Date.now()
+      };
+
       // Always clear idle timer
       if (mouseIdleTimer.current) {
         clearTimeout(mouseIdleTimer.current);
