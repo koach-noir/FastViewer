@@ -188,18 +188,22 @@ function App() {
         clearTimeout(level3Timer.current);
       }
 
-      // Immediately show level 1 (scene name)
-      setDisplayLevel(1);
+      // Only start progressive reveal if currently at level 0
+      if (displayLevel === 0) {
+        // Immediately show level 1 (scene name)
+        setDisplayLevel(1);
 
-      // Schedule level 2 (page info) after 200ms
-      level2Timer.current = setTimeout(() => {
-        setDisplayLevel(2);
-      }, 200);
+        // Schedule level 2 (page info) after 200ms
+        level2Timer.current = setTimeout(() => {
+          setDisplayLevel(2);
+        }, 200);
 
-      // Schedule level 3 (controls) after 500ms
-      level3Timer.current = setTimeout(() => {
-        setDisplayLevel(3);
-      }, 500);
+        // Schedule level 3 (controls) after 500ms
+        level3Timer.current = setTimeout(() => {
+          setDisplayLevel(3);
+        }, 500);
+      }
+      // If already at level 1+, just reset idle timer (don't change level)
 
       // Set idle timer to return to level 0 after 3s
       mouseIdleTimer.current = setTimeout(() => {
@@ -221,7 +225,7 @@ function App() {
         clearTimeout(level3Timer.current);
       }
     };
-  }, []);
+  }, [displayLevel]);
 
   // Keyboard navigation
   useEffect(() => {
