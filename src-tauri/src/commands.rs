@@ -25,7 +25,7 @@ impl AppState {
             current_collection: Arc::new(Mutex::new(None)),
             current_scene_index: Arc::new(Mutex::new(0)),
             current_page_index: Arc::new(Mutex::new(0)),
-            scene_loop_enabled: Arc::new(Mutex::new(true)), // Default ON (existing behavior)
+            scene_loop_enabled: Arc::new(Mutex::new(false)), // Default OFF
         }
     }
 }
