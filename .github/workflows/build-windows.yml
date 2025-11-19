@@ -51,4 +51,4 @@ jobs:
         if: always()
         run: |
           echo "Build completed. Checking for artifacts..."
-          dir src-tauri\target\release\bundle /s /b
+          Get-ChildItem -Path src-tauri\target\release\bundle -Recurse -File
