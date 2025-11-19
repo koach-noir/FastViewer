@@ -10,6 +10,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [autoPlay, setAutoPlay] = useState(false);
+  const [sceneLoopEnabled, setSceneLoopEnabled] = useState(true);
   const isNavigating = useRef(false);
 
   // Display level state (0: image only, 1: +scene name, 2: +page info, 3: +all controls)
@@ -17,6 +18,7 @@ function App() {
   const mouseHoverTimer = useRef<NodeJS.Timeout | null>(null);
   const mouseIdleTimer = useRef<NodeJS.Timeout | null>(null);
   const lastMouseMoveTime = useRef<number>(Date.now());
+  const previousSceneIndex = useRef<number | null>(null);
 
   const loadInitialScene = useCallback(async () => {
     try {
@@ -111,6 +113,32 @@ function App() {
     loadInitialScene();
   }, [loadInitialScene]);
 
+  // Load scene loop enabled state
+  useEffect(() => {
+    const loadSceneLoopState = async () => {
+      try {
+        const enabled = await invoke<boolean>("get_scene_loop_enabled");
+        setSceneLoopEnabled(enabled);
+      } catch (err) {
+        console.error("Failed to load scene loop state:", err);
+      }
+    };
+    loadSceneLoopState();
+  }, []);
+
+  // Handle scene loop toggle
+  const handleSceneLoopToggle = async () => {
+    const newState = !sceneLoopEnabled;
+    setSceneLoopEnabled(newState);
+    try {
+      await invoke("set_scene_loop_enabled", { enabled: newState });
+    } catch (err) {
+      console.error("Failed to set scene loop state:", err);
+      // Revert on error
+      setSceneLoopEnabled(!newState);
+    }
+  };
+
   // Auto play functionality
   useEffect(() => {
     if (!autoPlay) return;
@@ -121,6 +149,30 @@ function App() {
 
     return () => clearInterval(interval);
   }, [autoPlay, handleNextPage]);
+
+  // Scene change detection: transition from level 0 to level 1
+  useEffect(() => {
+    if (sceneInfo) {
+      // Check if scene has changed
+      if (previousSceneIndex.current !== null &&
+          previousSceneIndex.current !== sceneInfo.scene_index) {
+        // Scene changed - if at level 0, transition to level 1
+        if (displayLevel === 0) {
+          setDisplayLevel(1);
+
+          // Set idle timer to return to level 0 after 4s
+          if (mouseIdleTimer.current) {
+            clearTimeout(mouseIdleTimer.current);
+          }
+          mouseIdleTimer.current = setTimeout(() => {
+            setDisplayLevel(0);
+          }, 4000);
+        }
+      }
+      // Update previous scene index
+      previousSceneIndex.current = sceneInfo.scene_index;
+    }
+  }, [sceneInfo, displayLevel]);
 
   // Mouse hover and idle detection for display level control
   useEffect(() => {
@@ -335,6 +387,19 @@ function App() {
                   onClick={() => setAutoPlay((prev) => !prev)}
                 >
                   {autoPlay ? "⏸ Pause" : "▶ Play"}
+                </button>
+              </div>
+            )}
+
+            {/* Level 3: Scene loop toggle */}
+            {displayLevel >= 3 && (
+              <div className="scene-loop-control fade-in">
+                <button
+                  className={`scene-loop-button ${sceneLoopEnabled ? "active" : ""}`}
+                  onClick={handleSceneLoopToggle}
+                  title={sceneLoopEnabled ? "Scene Loop: ON (stays within scene)" : "Scene Loop: OFF (transitions between scenes)"}
+                >
+                  {sceneLoopEnabled ? "🔁 Loop: ON" : "➡️ Loop: OFF"}
                 </button>
               </div>
             )}
