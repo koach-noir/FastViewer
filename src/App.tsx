@@ -12,6 +12,12 @@ function App() {
   const [autoPlay, setAutoPlay] = useState(false);
   const isNavigating = useRef(false);
 
+  // Display level state (0: image only, 1: +scene name, 2: +page info, 3: +all controls)
+  const [displayLevel, setDisplayLevel] = useState(0);
+  const mouseHoverTimer = useRef<NodeJS.Timeout | null>(null);
+  const mouseIdleTimer = useRef<NodeJS.Timeout | null>(null);
+  const lastMouseMoveTime = useRef<number>(Date.now());
+
   const loadInitialScene = useCallback(async () => {
     try {
       setLoading(true);
@@ -116,6 +122,55 @@ function App() {
     return () => clearInterval(interval);
   }, [autoPlay, handleNextPage]);
 
+  // Mouse hover and idle detection for display level control
+  useEffect(() => {
+    const clearTimers = () => {
+      if (mouseHoverTimer.current) {
+        clearTimeout(mouseHoverTimer.current);
+        mouseHoverTimer.current = null;
+      }
+      if (mouseIdleTimer.current) {
+        clearTimeout(mouseIdleTimer.current);
+        mouseIdleTimer.current = null;
+      }
+    };
+
+    const handleMouseMove = () => {
+      lastMouseMoveTime.current = Date.now();
+
+      // Clear existing timers
+      clearTimers();
+
+      // Start progressive display level increase
+      // Level 0 -> 1: 0.5s
+      mouseHoverTimer.current = setTimeout(() => {
+        setDisplayLevel(1);
+
+        // Level 1 -> 2: 1s after reaching level 1
+        mouseHoverTimer.current = setTimeout(() => {
+          setDisplayLevel(2);
+
+          // Level 2 -> 3: 2s after reaching level 2
+          mouseHoverTimer.current = setTimeout(() => {
+            setDisplayLevel(3);
+          }, 2000);
+        }, 1000);
+      }, 500);
+
+      // Set idle timer to return to level 0 after 4s of no mouse movement
+      mouseIdleTimer.current = setTimeout(() => {
+        setDisplayLevel(0);
+      }, 4000);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      clearTimers();
+    };
+  }, []);
+
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -181,7 +236,7 @@ function App() {
   };
 
   return (
-    <div className="app">
+    <div className={`app ${displayLevel === 0 ? "hide-cursor" : ""}`}>
       <div className="image-viewer">
         {loading && <div className="loading">Loading...</div>}
 
@@ -203,56 +258,74 @@ function App() {
 
             {sceneInfo && (
               <>
-                <div className="info-overlay">
-                  Page {sceneInfo.current_page + 1}
-                </div>
+                {/* Level 2+: Page number */}
+                {displayLevel >= 2 && (
+                  <div className="info-overlay fade-in">
+                    Page {sceneInfo.current_page + 1}
+                  </div>
+                )}
 
-                <div className="page-info">
-                  {imageData.image_path.split(/[/\\]/).pop()}
-                </div>
+                {/* Level 2+: Image filename */}
+                {displayLevel >= 2 && (
+                  <div className="page-info fade-in">
+                    {imageData.image_path.split(/[/\\]/).pop()}
+                  </div>
+                )}
 
-                <div className="scene-info">
-                  <div>{sceneInfo.scene_name}</div>
-                  <div>Total Pages: {sceneInfo.total_pages}</div>
-                </div>
+                {/* Level 1+: Scene name */}
+                {displayLevel >= 1 && (
+                  <div className="scene-info fade-in">
+                    <div>{sceneInfo.scene_name}</div>
+                    {/* Level 2+: Total pages */}
+                    {displayLevel >= 2 && (
+                      <div>Total Pages: {sceneInfo.total_pages}</div>
+                    )}
+                  </div>
+                )}
               </>
             )}
 
-            <div className="navigation-controls">
-              <button className="nav-button" onClick={handlePrevScene}>
-                &lt;&lt; Prev Scene
-              </button>
-              <button
-                className="nav-button"
-                onClick={() => {
-                  console.log("Prev Page button clicked");
-                  handlePrevPage();
-                }}
-              >
-                &lt; Prev
-              </button>
-              <button
-                className="nav-button"
-                onClick={() => {
-                  console.log("Next Page button clicked");
-                  handleNextPage();
-                }}
-              >
-                Next &gt;
-              </button>
-              <button className="nav-button" onClick={handleNextScene}>
-                Next Scene &gt;&gt;
-              </button>
-            </div>
+            {/* Level 3: Navigation controls */}
+            {displayLevel >= 3 && (
+              <div className="navigation-controls fade-in">
+                <button className="nav-button" onClick={handlePrevScene}>
+                  &lt;&lt; Prev Scene
+                </button>
+                <button
+                  className="nav-button"
+                  onClick={() => {
+                    console.log("Prev Page button clicked");
+                    handlePrevPage();
+                  }}
+                >
+                  &lt; Prev
+                </button>
+                <button
+                  className="nav-button"
+                  onClick={() => {
+                    console.log("Next Page button clicked");
+                    handleNextPage();
+                  }}
+                >
+                  Next &gt;
+                </button>
+                <button className="nav-button" onClick={handleNextScene}>
+                  Next Scene &gt;&gt;
+                </button>
+              </div>
+            )}
 
-            <div className="autoplay-control">
-              <button
-                className={`autoplay-button ${autoPlay ? "active" : ""}`}
-                onClick={() => setAutoPlay((prev) => !prev)}
-              >
-                {autoPlay ? "⏸ Pause" : "▶ Play"}
-              </button>
-            </div>
+            {/* Level 3: Autoplay control */}
+            {displayLevel >= 3 && (
+              <div className="autoplay-control fade-in">
+                <button
+                  className={`autoplay-button ${autoPlay ? "active" : ""}`}
+                  onClick={() => setAutoPlay((prev) => !prev)}
+                >
+                  {autoPlay ? "⏸ Pause" : "▶ Play"}
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>

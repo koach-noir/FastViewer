@@ -209,3 +209,26 @@ body, html, #root {
   background-color: rgba(76, 175, 80, 0.5);
   border-color: rgba(76, 175, 80, 0.8);
 }
+
+/* Display Level System */
+.hide-cursor {
+  cursor: none !important;
+}
+
+.hide-cursor * {
+  cursor: none !important;
+}
+
+/* Fade-in animation for display level transitions */
+.fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
