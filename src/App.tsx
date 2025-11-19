@@ -15,10 +15,16 @@ function App() {
 
   // Display level state (0: image only, 1: +scene name, 2: +page info, 3: +controls)
   const [displayLevel, setDisplayLevel] = useState(0);
+  const displayLevelRef = useRef(0);
   const mouseIdleTimer = useRef<NodeJS.Timeout | null>(null);
   const level2Timer = useRef<NodeJS.Timeout | null>(null);
   const level3Timer = useRef<NodeJS.Timeout | null>(null);
   const previousSceneIndex = useRef<number | null>(null);
+
+  // Keep displayLevelRef in sync with displayLevel state
+  useEffect(() => {
+    displayLevelRef.current = displayLevel;
+  }, [displayLevel]);
 
   const loadInitialScene = useCallback(async () => {
     try {
@@ -183,7 +189,7 @@ function App() {
       }
 
       // Only start progressive reveal if currently at level 0
-      if (displayLevel === 0) {
+      if (displayLevelRef.current === 0) {
         // Clear progression timers only when starting from level 0
         if (level2Timer.current) {
           clearTimeout(level2Timer.current);
@@ -227,7 +233,7 @@ function App() {
         clearTimeout(level3Timer.current);
       }
     };
-  }, [displayLevel]);
+  }, []); // Empty dependency array - only run once on mount
 
   // Keyboard navigation
   useEffect(() => {
