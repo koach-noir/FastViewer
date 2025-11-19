@@ -399,68 +399,72 @@ async fn preload_next_images_task(
 ) -> Result<(), String> {
     println!("=== Preloading next {} images ===", count);
 
-    let scene_guard = current_scene.lock().unwrap();
-    let page_index = *current_page_index.lock().unwrap();
+    // Extract paths to load within a scoped block to ensure locks are released
+    let paths_to_load = {
+        let scene_guard = current_scene.lock().unwrap();
+        let page_index = *current_page_index.lock().unwrap();
 
-    if let Some(scene) = scene_guard.as_ref() {
-        let total_pages = scene.page_count();
+        if let Some(scene) = scene_guard.as_ref() {
+            let total_pages = scene.page_count();
 
-        // Get paths to preload
-        let mut paths_to_load = Vec::new();
-        for i in 1..=count {
-            let next_page = (page_index + i) % total_pages;
-            if let Some(path) = scene.get_page_image(next_page) {
-                paths_to_load.push((path.to_string(), 85)); // main image with quality 85
+            // Get paths to preload
+            let mut paths = Vec::new();
+            for i in 1..=count {
+                let next_page = (page_index + i) % total_pages;
+                if let Some(path) = scene.get_page_image(next_page) {
+                    paths.push((path.to_string(), 85)); // main image with quality 85
 
-                // Also get thumbnail path
-                let thumb_path = scene.get_thumbnail_path(path);
-                if thumb_path.exists() {
-                    if let Some(thumb_str) = thumb_path.to_str() {
-                        paths_to_load.push((thumb_str.to_string(), 75)); // thumbnail with quality 75
+                    // Also get thumbnail path
+                    let thumb_path = scene.get_thumbnail_path(path);
+                    if thumb_path.exists() {
+                        if let Some(thumb_str) = thumb_path.to_str() {
+                            paths.push((thumb_str.to_string(), 75)); // thumbnail with quality 75
+                        }
                     }
                 }
             }
+            paths
+        } else {
+            Vec::new()
         }
+    }; // Lock is automatically released here
 
-        drop(scene_guard); // Release lock before loading operations
+    // Load images into cache and encode them IN PARALLEL
+    // Spawn a separate task for each image to utilize multiple CPU cores
+    let tasks: Vec<_> = paths_to_load
+        .into_iter()
+        .map(|(path, quality)| {
+            let cache_clone = cache.clone();
+            let encoded_cache_clone = encoded_cache.clone();
 
-        // Load images into cache and encode them IN PARALLEL
-        // Spawn a separate task for each image to utilize multiple CPU cores
-        let tasks: Vec<_> = paths_to_load
-            .into_iter()
-            .map(|(path, quality)| {
-                let cache_clone = cache.clone();
-                let encoded_cache_clone = encoded_cache.clone();
+            tokio::spawn(async move {
+                // Skip if already in encoded cache
+                if encoded_cache_clone.get(&path).is_some() {
+                    println!("Already in encoded cache: {}", path);
+                    return;
+                }
 
-                tokio::spawn(async move {
-                    // Skip if already in encoded cache
-                    if encoded_cache_clone.get(&path).is_some() {
-                        println!("Already in encoded cache: {}", path);
-                        return;
-                    }
-
-                    match load_image_cached(&path, &cache_clone) {
-                        Ok(img) => {
-                            println!("Preloaded to image cache: {}", path);
-                            // Encode and store in encoded cache
-                            match image_to_base64_jpeg(&img, quality) {
-                                Ok(base64) => {
-                                    encoded_cache_clone.insert(path.clone(), base64);
-                                    println!("Encoded and cached: {}", path);
-                                }
-                                Err(e) => eprintln!("Failed to encode {}: {}", path, e),
+                match load_image_cached(&path, &cache_clone) {
+                    Ok(img) => {
+                        println!("Preloaded to image cache: {}", path);
+                        // Encode and store in encoded cache
+                        match image_to_base64_jpeg(&img, quality) {
+                            Ok(base64) => {
+                                encoded_cache_clone.insert(path.clone(), base64);
+                                println!("Encoded and cached: {}", path);
                             }
+                            Err(e) => eprintln!("Failed to encode {}: {}", path, e),
                         }
-                        Err(e) => eprintln!("Failed to preload {}: {}", path, e),
                     }
-                })
+                    Err(e) => eprintln!("Failed to preload {}: {}", path, e),
+                }
             })
-            .collect();
+        })
+        .collect();
 
-        // Wait for all parallel tasks to complete
-        join_all(tasks).await;
-        println!("=== Preloading completed (parallel) ===");
-    }
+    // Wait for all parallel tasks to complete
+    join_all(tasks).await;
+    println!("=== Preloading completed (parallel) ===");
 
     Ok(())
 }
