@@ -3,7 +3,7 @@ use crate::scene::{Scene, SceneCollection};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};  // PathBufを削除
-use tauri::{State, AppHandle, Manager};
+use tauri::{State, AppHandle, Emitter};
 use futures::future::join_all;
 
 /// Application state shared across commands
