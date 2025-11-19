@@ -4,6 +4,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};  // PathBufを削除
 use tauri::State;
+use futures::future::join_all;
 
 /// Application state shared across commands
 pub struct AppState {
@@ -423,30 +424,42 @@ async fn preload_next_images_task(
 
         drop(scene_guard); // Release lock before loading operations
 
-        // Load images into cache and encode them
-        for (path, quality) in paths_to_load {
-            // Skip if already in encoded cache
-            if encoded_cache.get(&path).is_some() {
-                println!("Already in encoded cache: {}", path);
-                continue;
-            }
+        // Load images into cache and encode them IN PARALLEL
+        // Spawn a separate task for each image to utilize multiple CPU cores
+        let tasks: Vec<_> = paths_to_load
+            .into_iter()
+            .map(|(path, quality)| {
+                let cache_clone = cache.clone();
+                let encoded_cache_clone = encoded_cache.clone();
 
-            match load_image_cached(&path, &cache) {
-                Ok(img) => {
-                    println!("Preloaded to image cache: {}", path);
-                    // Encode and store in encoded cache
-                    match image_to_base64_jpeg(&img, quality) {
-                        Ok(base64) => {
-                            encoded_cache.insert(path.clone(), base64);
-                            println!("Encoded and cached: {}", path);
-                        }
-                        Err(e) => eprintln!("Failed to encode {}: {}", path, e),
+                tokio::spawn(async move {
+                    // Skip if already in encoded cache
+                    if encoded_cache_clone.get(&path).is_some() {
+                        println!("Already in encoded cache: {}", path);
+                        return;
                     }
-                }
-                Err(e) => eprintln!("Failed to preload {}: {}", path, e),
-            }
-        }
-        println!("=== Preloading completed ===");
+
+                    match load_image_cached(&path, &cache_clone) {
+                        Ok(img) => {
+                            println!("Preloaded to image cache: {}", path);
+                            // Encode and store in encoded cache
+                            match image_to_base64_jpeg(&img, quality) {
+                                Ok(base64) => {
+                                    encoded_cache_clone.insert(path.clone(), base64);
+                                    println!("Encoded and cached: {}", path);
+                                }
+                                Err(e) => eprintln!("Failed to encode {}: {}", path, e),
+                            }
+                        }
+                        Err(e) => eprintln!("Failed to preload {}: {}", path, e),
+                    }
+                })
+            })
+            .collect();
+
+        // Wait for all parallel tasks to complete
+        join_all(tasks).await;
+        println!("=== Preloading completed (parallel) ===");
     }
 
     Ok(())
