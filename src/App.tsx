@@ -177,19 +177,21 @@ function App() {
   // Mouse hover and idle detection for display level control
   useEffect(() => {
     const handleMouseMove = () => {
-      // Clear all existing timers
+      // Always clear idle timer
       if (mouseIdleTimer.current) {
         clearTimeout(mouseIdleTimer.current);
-      }
-      if (level2Timer.current) {
-        clearTimeout(level2Timer.current);
-      }
-      if (level3Timer.current) {
-        clearTimeout(level3Timer.current);
       }
 
       // Only start progressive reveal if currently at level 0
       if (displayLevel === 0) {
+        // Clear progression timers only when starting from level 0
+        if (level2Timer.current) {
+          clearTimeout(level2Timer.current);
+        }
+        if (level3Timer.current) {
+          clearTimeout(level3Timer.current);
+        }
+
         // Immediately show level 1 (scene name)
         setDisplayLevel(1);
 
@@ -203,7 +205,7 @@ function App() {
           setDisplayLevel(3);
         }, 500);
       }
-      // If already at level 1+, just reset idle timer (don't change level)
+      // If already at level 1+, don't touch progression timers (let them complete)
 
       // Set idle timer to return to level 0 after 3s
       mouseIdleTimer.current = setTimeout(() => {
