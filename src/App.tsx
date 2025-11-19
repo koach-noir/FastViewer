@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { join, appDataDir } from "@tauri-apps/api/path";
 import { SceneInfo, ImageData } from "./types";
@@ -10,6 +10,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [autoPlay, setAutoPlay] = useState(false);
+  const isNavigating = useRef(false);
 
   const loadInitialScene = useCallback(async () => {
     try {
@@ -49,6 +50,12 @@ function App() {
 
   const handleNextPage = useCallback(async () => {
     console.log("=== handleNextPage called ===");
+    if (isNavigating.current) {
+      console.log("Navigation already in progress, ignoring");
+      return;
+    }
+
+    isNavigating.current = true;
     try {
       console.log("Invoking next_page command...");
       const data = await invoke<ImageData>("next_page");
@@ -62,11 +69,19 @@ function App() {
       console.log("=== handleNextPage completed ===");
     } catch (err) {
       console.error("Failed to navigate to next page:", err);
+    } finally {
+      isNavigating.current = false;
     }
   }, []);
 
   const handlePrevPage = useCallback(async () => {
     console.log("=== handlePrevPage called ===");
+    if (isNavigating.current) {
+      console.log("Navigation already in progress, ignoring");
+      return;
+    }
+
+    isNavigating.current = true;
     try {
       console.log("Invoking prev_page command...");
       const data = await invoke<ImageData>("prev_page");
@@ -80,6 +95,8 @@ function App() {
       console.log("=== handlePrevPage completed ===");
     } catch (err) {
       console.error("Failed to navigate to previous page:", err);
+    } finally {
+      isNavigating.current = false;
     }
   }, []);
 
