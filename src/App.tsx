@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { join, appDataDir } from "@tauri-apps/api/path";
 import { SceneInfo, ImageData } from "./types";
+import * as imageService from "./features/image-viewer/services/imageService";
+import { useNotification } from "./framework/hooks/useNotification";
+import { Notification } from "./framework/components/Notification";
 import "./App.css";
 
 function App() {
@@ -25,9 +27,8 @@ function App() {
   const previousSceneIndex = useRef<number | null>(null);
   const lastMouseDownLevel = useRef<{level: number, timestamp: number}>({level: 0, timestamp: 0});
 
-  // Notification system state
-  const [notification, setNotification] = useState<string | null>(null);
-  const notificationTimer = useRef<NodeJS.Timeout | null>(null);
+  // Notification system
+  const { notification, showNotification } = useNotification();
 
   // Keep displayLevelRef in sync with displayLevel state
   useEffect(() => {
@@ -52,15 +53,12 @@ function App() {
         scenePath = await join(appData, "scenes", sceneName);
       }
 
-      await invoke("load_scene_collection", { path: scenePath });
+      await imageService.loadSceneCollection(scenePath);
 
-      const info = await invoke<SceneInfo>("get_scene_info");
+      const info = await imageService.getSceneInfo();
       setSceneInfo(info);
 
-      const data = await invoke<ImageData>("get_image", {
-        sceneIndex: null,
-        pageIndex: 0,
-      });
+      const data = await imageService.getImage(null, 0);
       setImageData(data);
     } catch (err) {
       setError(`Failed to load scene: ${err}`);
@@ -75,22 +73,6 @@ function App() {
     autoPlayPausedUntil.current = Date.now() + 1000; // Pause for 1 second
   }, []);
 
-  // Generic notification system - shows a message for a specified duration
-  const showNotification = useCallback((message: string, duration: number = 2000) => {
-    // Clear any existing notification timer
-    if (notificationTimer.current) {
-      clearTimeout(notificationTimer.current);
-    }
-
-    // Show the notification
-    setNotification(message);
-
-    // Auto-dismiss after duration
-    notificationTimer.current = setTimeout(() => {
-      setNotification(null);
-    }, duration);
-  }, []);
-
   const handleNextPage = useCallback(async () => {
     console.log("=== handleNextPage called ===");
     if (isNavigating.current) {
@@ -101,12 +83,12 @@ function App() {
     isNavigating.current = true;
     try {
       console.log("Invoking next_page command...");
-      const data = await invoke<ImageData>("next_page");
+      const data = await imageService.nextPage();
       console.log("next_page response:", data);
       setImageData(data);
 
       console.log("Getting scene info...");
-      const info = await invoke<SceneInfo>("get_scene_info");
+      const info = await imageService.getSceneInfo();
       console.log("Scene info:", info);
       setSceneInfo(info);
       console.log("=== handleNextPage completed ===");
@@ -127,12 +109,12 @@ function App() {
     isNavigating.current = true;
     try {
       console.log("Invoking prev_page command...");
-      const data = await invoke<ImageData>("prev_page");
+      const data = await imageService.prevPage();
       console.log("prev_page response:", data);
       setImageData(data);
 
       console.log("Getting scene info...");
-      const info = await invoke<SceneInfo>("get_scene_info");
+      const info = await imageService.getSceneInfo();
       console.log("Scene info:", info);
       setSceneInfo(info);
       console.log("=== handlePrevPage completed ===");
@@ -152,7 +134,7 @@ function App() {
   useEffect(() => {
     const loadSceneLoopState = async () => {
       try {
-        const enabled = await invoke<boolean>("get_scene_loop_enabled");
+        const enabled = await imageService.getSceneLoopEnabled();
         setSceneLoopEnabled(enabled);
       } catch (err) {
         console.error("Failed to load scene loop state:", err);
@@ -166,7 +148,7 @@ function App() {
     const newState = !sceneLoopEnabled;
     setSceneLoopEnabled(newState);
     try {
-      await invoke("set_scene_loop_enabled", { enabled: newState });
+      await imageService.setSceneLoopEnabled(newState);
     } catch (err) {
       console.error("Failed to set scene loop state:", err);
       // Revert on error
@@ -361,13 +343,10 @@ function App() {
 
   const handleNextScene = async () => {
     try {
-      const info = await invoke<SceneInfo>("next_scene");
+      const info = await imageService.nextScene();
       setSceneInfo(info);
 
-      const data = await invoke<ImageData>("get_image", {
-        sceneIndex: null,
-        pageIndex: 0,
-      });
+      const data = await imageService.getImage(null, 0);
       setImageData(data);
     } catch (err) {
       console.error("Failed to navigate to next scene:", err);
@@ -376,13 +355,10 @@ function App() {
 
   const handlePrevScene = async () => {
     try {
-      const info = await invoke<SceneInfo>("prev_scene");
+      const info = await imageService.prevScene();
       setSceneInfo(info);
 
-      const data = await invoke<ImageData>("get_image", {
-        sceneIndex: null,
-        pageIndex: 0,
-      });
+      const data = await imageService.getImage(null, 0);
       setImageData(data);
     } catch (err) {
       console.error("Failed to navigate to previous scene:", err);
@@ -508,11 +484,7 @@ function App() {
             </div>
 
             {/* Notification system - shows status messages */}
-            {notification && (
-              <div className="notification">
-                {notification}
-              </div>
-            )}
+            <Notification notification={notification} />
           </>
         )}
       </div>
