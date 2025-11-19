@@ -1,21 +1,28 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { join, appDataDir } from "@tauri-apps/api/path";
-import { SceneInfo, ImageData } from "./types";
-import * as imageService from "./features/image-viewer/services/imageService";
 import { useNotification } from "./framework/hooks/useNotification";
 import { Notification } from "./framework/components/Notification";
+import { useImageContent } from "./features/image-viewer/hooks/useImageContent";
 import "./App.css";
 
 function App() {
-  const [imageData, setImageData] = useState<ImageData | null>(null);
-  const [sceneInfo, setSceneInfo] = useState<SceneInfo | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Image content management
+  const {
+    imageData,
+    sceneInfo,
+    loading,
+    error,
+    sceneLoopEnabled,
+    handleNextPage,
+    handlePrevPage,
+    handleNextScene,
+    handlePrevScene,
+    handleSceneLoopToggle,
+  } = useImageContent();
+
+  // Auto-play state
   const [autoPlay, setAutoPlay] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0); // 0.5x to 3.0x speed
   const [autoPlayReverse, setAutoPlayReverse] = useState(false); // Auto-play direction toggle
-  const [sceneLoopEnabled, setSceneLoopEnabled] = useState(false);
-  const isNavigating = useRef(false);
   const autoPlayPausedUntil = useRef<number>(0); // Timestamp until which auto-play is paused
 
   // Display level state (0: image only, 1: +scene name, 2: +page info, 3: +controls)
@@ -35,126 +42,10 @@ function App() {
     displayLevelRef.current = displayLevel;
   }, [displayLevel]);
 
-  const loadInitialScene = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // パス解決: 開発時と本番時で異なるディレクトリを使用
-      let scenePath: string;
-
-      if (import.meta.env.DEV) {
-        // 開発時: 環境変数または相対パス
-        scenePath = import.meta.env.VITE_SCENE_PATH || "./test-scenes/my-photos";
-      } else {
-        // 本番時: アプリデータディレクトリ配下
-        const appData = await appDataDir();
-        const sceneName = import.meta.env.VITE_SCENE_NAME || "my-photos";
-        scenePath = await join(appData, "scenes", sceneName);
-      }
-
-      await imageService.loadSceneCollection(scenePath);
-
-      const info = await imageService.getSceneInfo();
-      setSceneInfo(info);
-
-      const data = await imageService.getImage(null, 0);
-      setImageData(data);
-    } catch (err) {
-      setError(`Failed to load scene: ${err}`);
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   // Pause auto-play for 1 second when user manually navigates
   const pauseAutoPlay = useCallback(() => {
     autoPlayPausedUntil.current = Date.now() + 1000; // Pause for 1 second
   }, []);
-
-  const handleNextPage = useCallback(async () => {
-    console.log("=== handleNextPage called ===");
-    if (isNavigating.current) {
-      console.log("Navigation already in progress, ignoring");
-      return;
-    }
-
-    isNavigating.current = true;
-    try {
-      console.log("Invoking next_page command...");
-      const data = await imageService.nextPage();
-      console.log("next_page response:", data);
-      setImageData(data);
-
-      console.log("Getting scene info...");
-      const info = await imageService.getSceneInfo();
-      console.log("Scene info:", info);
-      setSceneInfo(info);
-      console.log("=== handleNextPage completed ===");
-    } catch (err) {
-      console.error("Failed to navigate to next page:", err);
-    } finally {
-      isNavigating.current = false;
-    }
-  }, []);
-
-  const handlePrevPage = useCallback(async () => {
-    console.log("=== handlePrevPage called ===");
-    if (isNavigating.current) {
-      console.log("Navigation already in progress, ignoring");
-      return;
-    }
-
-    isNavigating.current = true;
-    try {
-      console.log("Invoking prev_page command...");
-      const data = await imageService.prevPage();
-      console.log("prev_page response:", data);
-      setImageData(data);
-
-      console.log("Getting scene info...");
-      const info = await imageService.getSceneInfo();
-      console.log("Scene info:", info);
-      setSceneInfo(info);
-      console.log("=== handlePrevPage completed ===");
-    } catch (err) {
-      console.error("Failed to navigate to previous page:", err);
-    } finally {
-      isNavigating.current = false;
-    }
-  }, []);
-
-  // Load initial scene
-  useEffect(() => {
-    loadInitialScene();
-  }, [loadInitialScene]);
-
-  // Load scene loop enabled state
-  useEffect(() => {
-    const loadSceneLoopState = async () => {
-      try {
-        const enabled = await imageService.getSceneLoopEnabled();
-        setSceneLoopEnabled(enabled);
-      } catch (err) {
-        console.error("Failed to load scene loop state:", err);
-      }
-    };
-    loadSceneLoopState();
-  }, []);
-
-  // Handle scene loop toggle
-  const handleSceneLoopToggle = async () => {
-    const newState = !sceneLoopEnabled;
-    setSceneLoopEnabled(newState);
-    try {
-      await imageService.setSceneLoopEnabled(newState);
-    } catch (err) {
-      console.error("Failed to set scene loop state:", err);
-      // Revert on error
-      setSceneLoopEnabled(!newState);
-    }
-  };
 
   // Auto play functionality with idling and reverse support
   useEffect(() => {
@@ -340,30 +231,6 @@ function App() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [handleNextPage, handlePrevPage, pauseAutoPlay, showNotification]);
-
-  const handleNextScene = async () => {
-    try {
-      const info = await imageService.nextScene();
-      setSceneInfo(info);
-
-      const data = await imageService.getImage(null, 0);
-      setImageData(data);
-    } catch (err) {
-      console.error("Failed to navigate to next scene:", err);
-    }
-  };
-
-  const handlePrevScene = async () => {
-    try {
-      const info = await imageService.prevScene();
-      setSceneInfo(info);
-
-      const data = await imageService.getImage(null, 0);
-      setImageData(data);
-    } catch (err) {
-      console.error("Failed to navigate to previous scene:", err);
-    }
-  };
 
   return (
     <div className={`app ${displayLevel === 0 ? "hide-cursor" : ""}`}>
