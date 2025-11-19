@@ -185,7 +185,8 @@ pub async fn get_image(
                     println!("✓ Preview decoded in {:?}, dimensions: {}x{}",
                         preview_start.elapsed(), img.width(), img.height());
 
-                    match image_to_base64_jpeg(&img, 75) {
+                    // Encode preview with lower quality (60) for maximum speed
+                    match image_to_base64_jpeg(&img, 60) {
                         Ok(base64) => {
                             println!("✓ Preview encoded in {:?}, size: {} bytes",
                                 preview_start.elapsed(), base64.len());
@@ -207,7 +208,8 @@ pub async fn get_image(
                                         println!("✓ High-res decoded in {:?}, dimensions: {}x{}",
                                             highres_start.elapsed(), img.width(), img.height());
 
-                                        match image_to_base64_jpeg(&img, 85) {
+                                        // Encode high-res with quality 70 (good balance between quality and speed)
+                                        match image_to_base64_jpeg(&img, 70) {
                                             Ok(base64) => {
                                                 println!("✓ High-res encoded in {:?}, size: {} bytes",
                                                     highres_start.elapsed(), base64.len());
@@ -496,13 +498,13 @@ async fn preload_next_images_task(
             for i in 1..=count {
                 let next_page = (page_index + i) % total_pages;
                 if let Some(path) = scene.get_page_image(next_page) {
-                    paths.push((path.to_string(), 85)); // main image with quality 85
+                    paths.push((path.to_string(), 70)); // main image with quality 70
 
                     // Also get thumbnail path
                     let thumb_path = scene.get_thumbnail_path(path);
                     if thumb_path.exists() {
                         if let Some(thumb_str) = thumb_path.to_str() {
-                            paths.push((thumb_str.to_string(), 75)); // thumbnail with quality 75
+                            paths.push((thumb_str.to_string(), 60)); // thumbnail with quality 60
                         }
                     }
                 }
@@ -522,8 +524,11 @@ async fn preload_next_images_task(
             let encoded_cache_clone = encoded_cache.clone();
 
             tokio::spawn(async move {
+                // Preload high-res (1920px) version
+                let highres_key = format!("{}@1920", path);
+
                 // Skip if already in encoded cache
-                if encoded_cache_clone.get(&path).is_some() {
+                if encoded_cache_clone.get(&highres_key).is_some() {
                     println!("Already in encoded cache: {}", path);
                     return;
                 }
@@ -531,11 +536,11 @@ async fn preload_next_images_task(
                 match load_image_cached(&path, &cache_clone) {
                     Ok(img) => {
                         println!("Preloaded to image cache: {}", path);
-                        // Encode and store in encoded cache
+                        // Encode and store in encoded cache with high-res key
                         match image_to_base64_jpeg(&img, quality) {
                             Ok(base64) => {
-                                encoded_cache_clone.insert(path.clone(), base64);
-                                println!("Encoded and cached: {}", path);
+                                encoded_cache_clone.insert(highres_key, base64);
+                                println!("Encoded and cached (1920px): {}", path);
                             }
                             Err(e) => eprintln!("Failed to encode {}: {}", path, e),
                         }
