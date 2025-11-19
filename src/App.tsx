@@ -13,9 +13,11 @@ function App() {
   const [sceneLoopEnabled, setSceneLoopEnabled] = useState(true);
   const isNavigating = useRef(false);
 
-  // Display level state (0: image only, 1: all UI)
+  // Display level state (0: image only, 1: +scene name, 2: +page info, 3: +controls)
   const [displayLevel, setDisplayLevel] = useState(0);
   const mouseIdleTimer = useRef<NodeJS.Timeout | null>(null);
+  const level2Timer = useRef<NodeJS.Timeout | null>(null);
+  const level3Timer = useRef<NodeJS.Timeout | null>(null);
   const previousSceneIndex = useRef<number | null>(null);
 
   const loadInitialScene = useCallback(async () => {
@@ -175,13 +177,29 @@ function App() {
   // Mouse hover and idle detection for display level control
   useEffect(() => {
     const handleMouseMove = () => {
-      // Immediately show all UI on mouse move
-      setDisplayLevel(1);
-
-      // Clear existing idle timer
+      // Clear all existing timers
       if (mouseIdleTimer.current) {
         clearTimeout(mouseIdleTimer.current);
       }
+      if (level2Timer.current) {
+        clearTimeout(level2Timer.current);
+      }
+      if (level3Timer.current) {
+        clearTimeout(level3Timer.current);
+      }
+
+      // Immediately show level 1 (scene name)
+      setDisplayLevel(1);
+
+      // Schedule level 2 (page info) after 200ms
+      level2Timer.current = setTimeout(() => {
+        setDisplayLevel(2);
+      }, 200);
+
+      // Schedule level 3 (controls) after 500ms
+      level3Timer.current = setTimeout(() => {
+        setDisplayLevel(3);
+      }, 500);
 
       // Set idle timer to return to level 0 after 3s
       mouseIdleTimer.current = setTimeout(() => {
@@ -195,6 +213,12 @@ function App() {
       window.removeEventListener("mousemove", handleMouseMove);
       if (mouseIdleTimer.current) {
         clearTimeout(mouseIdleTimer.current);
+      }
+      if (level2Timer.current) {
+        clearTimeout(level2Timer.current);
+      }
+      if (level3Timer.current) {
+        clearTimeout(level3Timer.current);
       }
     };
   }, []);
@@ -284,28 +308,40 @@ function App() {
               />
             </div>
 
-            {sceneInfo && displayLevel >= 1 && (
+            {sceneInfo && (
               <>
-                {/* Page number */}
-                <div className="info-overlay fade-in">
-                  Page {sceneInfo.current_page + 1}
-                </div>
+                {/* Level 1+: Scene name */}
+                {displayLevel >= 1 && (
+                  <div className="scene-info fade-in">
+                    <div>{sceneInfo.scene_name}</div>
+                  </div>
+                )}
 
-                {/* Image filename */}
-                <div className="page-info fade-in">
-                  {imageData.image_path.split(/[/\\]/).pop()}
-                </div>
+                {/* Level 2+: Page number */}
+                {displayLevel >= 2 && (
+                  <div className="info-overlay fade-in">
+                    Page {sceneInfo.current_page + 1}
+                  </div>
+                )}
 
-                {/* Scene name */}
-                <div className="scene-info fade-in">
-                  <div>{sceneInfo.scene_name}</div>
-                  <div>Total Pages: {sceneInfo.total_pages}</div>
-                </div>
+                {/* Level 2+: Total pages */}
+                {displayLevel >= 2 && (
+                  <div className="scene-info fade-in">
+                    <div>Total Pages: {sceneInfo.total_pages}</div>
+                  </div>
+                )}
+
+                {/* Level 2+: Image filename */}
+                {displayLevel >= 2 && (
+                  <div className="page-info fade-in">
+                    {imageData.image_path.split(/[/\\]/).pop()}
+                  </div>
+                )}
               </>
             )}
 
-            {/* Navigation controls */}
-            {displayLevel >= 1 && (
+            {/* Level 3: Navigation controls */}
+            {displayLevel >= 3 && (
               <div className="navigation-controls fade-in">
                 <button className="nav-button" onClick={handlePrevScene}>
                   &lt;&lt; Prev Scene
@@ -334,8 +370,8 @@ function App() {
               </div>
             )}
 
-            {/* Autoplay control */}
-            {displayLevel >= 1 && (
+            {/* Level 3: Autoplay control */}
+            {displayLevel >= 3 && (
               <div className="autoplay-control fade-in">
                 <button
                   className={`autoplay-button ${autoPlay ? "active" : ""}`}
@@ -346,8 +382,8 @@ function App() {
               </div>
             )}
 
-            {/* Scene loop toggle */}
-            {displayLevel >= 1 && (
+            {/* Level 3: Scene loop toggle */}
+            {displayLevel >= 3 && (
               <div className="scene-loop-control fade-in">
                 <button
                   className={`scene-loop-button ${sceneLoopEnabled ? "active" : ""}`}
