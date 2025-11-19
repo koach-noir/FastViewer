@@ -1,4 +1,4 @@
-import { ImageData } from "../../../types";
+import { ImageData } from "../types";
 
 interface ImageDisplayProps {
   imageData: ImageData | null;

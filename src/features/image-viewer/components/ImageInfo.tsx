@@ -1,4 +1,4 @@
-import { SceneInfo, ImageData } from "../../../types";
+import { SceneInfo, ImageData } from "../types";
 
 interface ImageInfoProps {
   sceneInfo: SceneInfo | null;

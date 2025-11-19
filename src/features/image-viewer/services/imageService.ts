@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { ImageData, SceneInfo } from "../../../types";
+import { ImageData, SceneInfo } from "../types";
 
 /**
  * Service layer for Tauri API calls related to image viewing

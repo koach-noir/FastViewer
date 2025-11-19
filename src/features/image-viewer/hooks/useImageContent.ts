@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { join, appDataDir } from "@tauri-apps/api/path";
-import { ImageData, SceneInfo } from "../../../types";
+import { ImageData, SceneInfo } from "../types";
 import * as imageService from "../services/imageService";
 
 export interface UseImageContentReturn {
