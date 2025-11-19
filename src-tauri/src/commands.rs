@@ -153,24 +153,39 @@ pub async fn get_image(
         let thumbnail_path = scene.get_thumbnail_path(main_path);
 
         // Load main image - check encoded cache first
+        println!("Loading main image: {}", main_path);
+        let start = std::time::Instant::now();
+
         let main_image = if let Some(cached) = state.encoded_cache.get(main_path) {
+            println!("✓ Main image loaded from encoded cache in {:?}", start.elapsed());
             Some(cached)
         } else {
+            println!("Cache miss, loading from disk...");
+            let load_start = std::time::Instant::now();
             match load_image_cached(main_path, &state.cache) {
-                Ok(img) => match image_to_base64_jpeg(&img, 85) {
-                    Ok(base64) => {
-                        // Store in encoded cache for future use
-                        state.encoded_cache.insert(main_path.to_string(), base64.clone());
-                        Some(base64)
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to encode main image: {}", e);
-                        None
+                Ok(img) => {
+                    println!("✓ Image decoded in {:?}, dimensions: {}x{}",
+                        load_start.elapsed(), img.width(), img.height());
+
+                    let encode_start = std::time::Instant::now();
+                    match image_to_base64_jpeg(&img, 85) {
+                        Ok(base64) => {
+                            println!("✓ Image encoded to base64 in {:?}, size: {} bytes",
+                                encode_start.elapsed(), base64.len());
+                            // Store in encoded cache for future use
+                            state.encoded_cache.insert(main_path.to_string(), base64.clone());
+                            println!("✓ Total loading time: {:?}", start.elapsed());
+                            Some(base64)
+                        }
+                        Err(e) => {
+                            eprintln!("✗ Failed to encode main image {}: {}", main_path, e);
+                            return Err(format!("Failed to encode image: {}", e));
+                        }
                     }
                 },
                 Err(e) => {
-                    eprintln!("Failed to load main image: {}", e);
-                    None
+                    eprintln!("✗ Failed to load main image {}: {}", main_path, e);
+                    return Err(format!("Failed to load image: {}", e));
                 }
             }
         };
@@ -178,28 +193,35 @@ pub async fn get_image(
         // Load thumbnail if it exists - check encoded cache first
         let thumbnail_image = if thumbnail_path.exists() {
             let thumb_path_str = thumbnail_path.to_str().unwrap();
+            println!("Loading thumbnail: {}", thumb_path_str);
             if let Some(cached) = state.encoded_cache.get(thumb_path_str) {
+                println!("✓ Thumbnail loaded from encoded cache");
                 Some(cached)
             } else {
                 match load_image_cached(thumb_path_str, &state.cache) {
-                    Ok(img) => match image_to_base64_jpeg(&img, 75) {
-                        Ok(base64) => {
-                            // Store in encoded cache for future use
-                            state.encoded_cache.insert(thumb_path_str.to_string(), base64.clone());
-                            Some(base64)
-                        }
-                        Err(e) => {
-                            eprintln!("Failed to encode thumbnail: {}", e);
-                            None
+                    Ok(img) => {
+                        println!("✓ Thumbnail decoded, dimensions: {}x{}", img.width(), img.height());
+                        match image_to_base64_jpeg(&img, 75) {
+                            Ok(base64) => {
+                                // Store in encoded cache for future use
+                                state.encoded_cache.insert(thumb_path_str.to_string(), base64.clone());
+                                println!("✓ Thumbnail encoded, size: {} bytes", base64.len());
+                                Some(base64)
+                            }
+                            Err(e) => {
+                                eprintln!("✗ Failed to encode thumbnail: {}", e);
+                                None
+                            }
                         }
                     },
                     Err(e) => {
-                        eprintln!("Failed to load thumbnail: {}", e);
+                        eprintln!("✗ Failed to load thumbnail: {}", e);
                         None
                     }
                 }
             }
         } else {
+            println!("No thumbnail available");
             None
         };
 

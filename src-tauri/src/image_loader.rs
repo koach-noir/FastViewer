@@ -98,11 +98,18 @@ pub fn load_image<P: AsRef<Path>>(path: P) -> Result<DynamicImage> {
 pub fn load_image_cached(path: &str, cache: &ImageCache) -> Result<Arc<DynamicImage>> {
     // Check cache first
     if let Some(cached) = cache.get(path) {
+        println!("  [ImageCache] Cache hit for: {}", path);
         return Ok(cached);
     }
 
+    println!("  [ImageCache] Cache miss, loading from disk: {}", path);
+    let load_start = std::time::Instant::now();
+
     // Load from disk
     let mut img = load_image(path)?;
+    let original_dimensions = img.dimensions();
+    println!("  [ImageCache] Loaded in {:?}, original size: {}x{}",
+        load_start.elapsed(), original_dimensions.0, original_dimensions.1);
 
     // Automatically resize large images to improve performance
     // Maximum dimension set to 2560px (smaller than 4K for better performance)
@@ -110,13 +117,22 @@ pub fn load_image_cached(path: &str, cache: &ImageCache) -> Result<Arc<DynamicIm
     let (width, height) = img.dimensions();
 
     if width > MAX_DIMENSION || height > MAX_DIMENSION {
+        let resize_start = std::time::Instant::now();
         img = resize_to_fit(&img, MAX_DIMENSION, MAX_DIMENSION);
+        let new_dimensions = img.dimensions();
+        println!("  [ImageCache] Resized from {}x{} to {}x{} in {:?}",
+            original_dimensions.0, original_dimensions.1,
+            new_dimensions.0, new_dimensions.1,
+            resize_start.elapsed());
+    } else {
+        println!("  [ImageCache] No resize needed (within {}px)", MAX_DIMENSION);
     }
 
     let img_arc = Arc::new(img);
 
     // Store in cache
     cache.insert(path.to_string(), img_arc.clone());
+    println!("  [ImageCache] Stored in cache, total time: {:?}", load_start.elapsed());
 
     Ok(img_arc)
 }
