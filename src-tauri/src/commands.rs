@@ -1,4 +1,4 @@
-use crate::image_loader::{load_image_cached, image_to_base64_jpeg, ImageCache};
+use crate::image_loader::{load_image_cached, image_to_base64_jpeg, ImageCache, EncodedImageCache};
 use crate::scene::{Scene, SceneCollection};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -8,6 +8,7 @@ use tauri::State;
 /// Application state shared across commands
 pub struct AppState {
     pub cache: Arc<ImageCache>,
+    pub encoded_cache: Arc<EncodedImageCache>,
     pub current_scene: Arc<Mutex<Option<Scene>>>,
     pub current_collection: Arc<Mutex<Option<SceneCollection>>>,
     pub current_scene_index: Arc<Mutex<usize>>,
@@ -18,6 +19,7 @@ impl AppState {
     pub fn new() -> Self {
         AppState {
             cache: Arc::new(ImageCache::new(8)), // Cache up to 8 images
+            encoded_cache: Arc::new(EncodedImageCache::new(16)), // Cache up to 16 encoded images
             current_scene: Arc::new(Mutex::new(None)),
             current_collection: Arc::new(Mutex::new(None)),
             current_scene_index: Arc::new(Mutex::new(0)),
@@ -72,11 +74,12 @@ pub async fn load_scene_collection(
 
         // Preload initial images in background
         let cache = state.cache.clone();
+        let encoded_cache = state.encoded_cache.clone();
         let current_scene = state.current_scene.clone();
         let current_page_index = state.current_page_index.clone();
 
         tokio::spawn(async move {
-            let _ = preload_next_images_task(cache, current_scene, current_page_index, 3).await;
+            let _ = preload_next_images_task(cache, encoded_cache, current_scene, current_page_index, 3).await;
         });
     }
 
@@ -146,34 +149,51 @@ pub async fn get_image(
 
         let thumbnail_path = scene.get_thumbnail_path(main_path);
 
-        // Load main image
-        let main_image = match load_image_cached(main_path, &state.cache) {
-            Ok(img) => match image_to_base64_jpeg(&img, 85) {
-                Ok(base64) => Some(base64),
-                Err(e) => {
-                    eprintln!("Failed to encode main image: {}", e);
-                    None
-                }
-            },
-            Err(e) => {
-                eprintln!("Failed to load main image: {}", e);
-                None
-            }
-        };
-
-        // Load thumbnail if it exists
-        let thumbnail_image = if thumbnail_path.exists() {
-            match load_image_cached(thumbnail_path.to_str().unwrap(), &state.cache) {
-                Ok(img) => match image_to_base64_jpeg(&img, 75) {
-                    Ok(base64) => Some(base64),
+        // Load main image - check encoded cache first
+        let main_image = if let Some(cached) = state.encoded_cache.get(main_path) {
+            Some(cached)
+        } else {
+            match load_image_cached(main_path, &state.cache) {
+                Ok(img) => match image_to_base64_jpeg(&img, 85) {
+                    Ok(base64) => {
+                        // Store in encoded cache for future use
+                        state.encoded_cache.insert(main_path.to_string(), base64.clone());
+                        Some(base64)
+                    }
                     Err(e) => {
-                        eprintln!("Failed to encode thumbnail: {}", e);
+                        eprintln!("Failed to encode main image: {}", e);
                         None
                     }
                 },
                 Err(e) => {
-                    eprintln!("Failed to load thumbnail: {}", e);
+                    eprintln!("Failed to load main image: {}", e);
                     None
+                }
+            }
+        };
+
+        // Load thumbnail if it exists - check encoded cache first
+        let thumbnail_image = if thumbnail_path.exists() {
+            let thumb_path_str = thumbnail_path.to_str().unwrap();
+            if let Some(cached) = state.encoded_cache.get(thumb_path_str) {
+                Some(cached)
+            } else {
+                match load_image_cached(thumb_path_str, &state.cache) {
+                    Ok(img) => match image_to_base64_jpeg(&img, 75) {
+                        Ok(base64) => {
+                            // Store in encoded cache for future use
+                            state.encoded_cache.insert(thumb_path_str.to_string(), base64.clone());
+                            Some(base64)
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to encode thumbnail: {}", e);
+                            None
+                        }
+                    },
+                    Err(e) => {
+                        eprintln!("Failed to load thumbnail: {}", e);
+                        None
+                    }
                 }
             }
         } else {
@@ -227,11 +247,12 @@ pub async fn next_page(state: State<'_, AppState>) -> Result<ImageData, String> 
     if result.is_ok() {
         // Clone the Arcs needed for background task
         let cache = state.cache.clone();
+        let encoded_cache = state.encoded_cache.clone();
         let current_scene = state.current_scene.clone();
         let current_page_index = state.current_page_index.clone();
 
         tokio::spawn(async move {
-            let _ = preload_next_images_task(cache, current_scene, current_page_index, 3).await;
+            let _ = preload_next_images_task(cache, encoded_cache, current_scene, current_page_index, 3).await;
         });
     }
 
@@ -271,11 +292,12 @@ pub async fn prev_page(state: State<'_, AppState>) -> Result<ImageData, String> 
     if result.is_ok() {
         // Clone the Arcs needed for background task
         let cache = state.cache.clone();
+        let encoded_cache = state.encoded_cache.clone();
         let current_scene = state.current_scene.clone();
         let current_page_index = state.current_page_index.clone();
 
         tokio::spawn(async move {
-            let _ = preload_next_images_task(cache, current_scene, current_page_index, 3).await;
+            let _ = preload_next_images_task(cache, encoded_cache, current_scene, current_page_index, 3).await;
         });
     }
 
@@ -286,6 +308,7 @@ pub async fn prev_page(state: State<'_, AppState>) -> Result<ImageData, String> 
 /// Background task to preload next images
 async fn preload_next_images_task(
     cache: Arc<ImageCache>,
+    encoded_cache: Arc<EncodedImageCache>,
     current_scene: Arc<Mutex<Option<Scene>>>,
     current_page_index: Arc<Mutex<usize>>,
     count: usize,
@@ -303,13 +326,13 @@ async fn preload_next_images_task(
         for i in 1..=count {
             let next_page = (page_index + i) % total_pages;
             if let Some(path) = scene.get_page_image(next_page) {
-                paths_to_load.push(path.to_string());
+                paths_to_load.push((path.to_string(), 85)); // main image with quality 85
 
                 // Also get thumbnail path
                 let thumb_path = scene.get_thumbnail_path(path);
                 if thumb_path.exists() {
                     if let Some(thumb_str) = thumb_path.to_str() {
-                        paths_to_load.push(thumb_str.to_string());
+                        paths_to_load.push((thumb_str.to_string(), 75)); // thumbnail with quality 75
                     }
                 }
             }
@@ -317,10 +340,26 @@ async fn preload_next_images_task(
 
         drop(scene_guard); // Release lock before loading operations
 
-        // Load images into cache
-        for path in paths_to_load {
+        // Load images into cache and encode them
+        for (path, quality) in paths_to_load {
+            // Skip if already in encoded cache
+            if encoded_cache.get(&path).is_some() {
+                println!("Already in encoded cache: {}", path);
+                continue;
+            }
+
             match load_image_cached(&path, &cache) {
-                Ok(_) => println!("Preloaded: {}", path),
+                Ok(img) => {
+                    println!("Preloaded to image cache: {}", path);
+                    // Encode and store in encoded cache
+                    match image_to_base64_jpeg(&img, quality) {
+                        Ok(base64) => {
+                            encoded_cache.insert(path.clone(), base64);
+                            println!("Encoded and cached: {}", path);
+                        }
+                        Err(e) => eprintln!("Failed to encode {}: {}", path, e),
+                    }
+                }
                 Err(e) => eprintln!("Failed to preload {}: {}", path, e),
             }
         }
