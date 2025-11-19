@@ -1,0 +1,37 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "sceneName": "Animation Test",
+    "imageSize": {
+      "width": 1920,
+      "height": 1080
+    },
+    "thumbnailSize": {
+      "width": 320,
+      "height": 180
+    }
+  },
+  "pages": [
+    {
+      "image": "/Users/yutakakoach/output/animation/FastViewer/public/images/Number-01.png"
+    },
+    {
+      "image": "/Users/yutakakoach/output/animation/FastViewer/public/images/Number-02.png"
+    },
+    {
+      "image": "/Users/yutakakoach/output/animation/FastViewer/public/images/Number-03.png"
+    },
+    {
+      "image": "/Users/yutakakoach/output/animation/FastViewer/public/images/Number-04.png"
+    },
+    {
+      "image": "/Users/yutakakoach/output/animation/FastViewer/public/images/Number-05.png"
+    },
+    {
+      "image": "/Users/yutakakoach/output/animation/FastViewer/public/images/Number-06.png"
+    },
+    {
+      "image": "/Users/yutakakoach/output/animation/FastViewer/public/images/Number-07.png"
+    }
+  ]
+}
