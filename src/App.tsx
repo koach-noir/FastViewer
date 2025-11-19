@@ -13,11 +13,11 @@ function App() {
   const [sceneLoopEnabled, setSceneLoopEnabled] = useState(true);
   const isNavigating = useRef(false);
 
-  // Display level state (0: image only, 1: +scene name, 2: +page info, 3: +all controls)
+  // Display level state (0: image only, 1: +scene name, 2: +page info, 3: +controls)
   const [displayLevel, setDisplayLevel] = useState(0);
-  const mouseHoverTimer = useRef<NodeJS.Timeout | null>(null);
   const mouseIdleTimer = useRef<NodeJS.Timeout | null>(null);
-  const lastMouseMoveTime = useRef<number>(Date.now());
+  const level2Timer = useRef<NodeJS.Timeout | null>(null);
+  const level3Timer = useRef<NodeJS.Timeout | null>(null);
   const previousSceneIndex = useRef<number | null>(null);
 
   const loadInitialScene = useCallback(async () => {
@@ -160,13 +160,13 @@ function App() {
         if (displayLevel === 0) {
           setDisplayLevel(1);
 
-          // Set idle timer to return to level 0 after 4s
+          // Set idle timer to return to level 0 after 3s
           if (mouseIdleTimer.current) {
             clearTimeout(mouseIdleTimer.current);
           }
           mouseIdleTimer.current = setTimeout(() => {
             setDisplayLevel(0);
-          }, 4000);
+          }, 3000);
         }
       }
       // Update previous scene index
@@ -176,62 +176,50 @@ function App() {
 
   // Mouse hover and idle detection for display level control
   useEffect(() => {
-    const clearTimers = () => {
-      if (mouseHoverTimer.current) {
-        clearTimeout(mouseHoverTimer.current);
-        mouseHoverTimer.current = null;
-      }
-      if (mouseIdleTimer.current) {
-        clearTimeout(mouseIdleTimer.current);
-        mouseIdleTimer.current = null;
-      }
-    };
-
-    const setIdleTimer = () => {
-      // Clear existing idle timer
-      if (mouseIdleTimer.current) {
-        clearTimeout(mouseIdleTimer.current);
-      }
-      // Set idle timer to return to level 0 after 4s
-      mouseIdleTimer.current = setTimeout(() => {
-        setDisplayLevel(0);
-      }, 4000);
-    };
-
     const handleMouseMove = () => {
-      lastMouseMoveTime.current = Date.now();
+      // Clear all existing timers
+      if (mouseIdleTimer.current) {
+        clearTimeout(mouseIdleTimer.current);
+      }
+      if (level2Timer.current) {
+        clearTimeout(level2Timer.current);
+      }
+      if (level3Timer.current) {
+        clearTimeout(level3Timer.current);
+      }
 
-      // Clear existing timers
-      clearTimers();
+      // Immediately show level 1 (scene name)
+      setDisplayLevel(1);
 
-      // Start progressive display level increase
-      // Level 0 -> 1: 0.5s
-      mouseHoverTimer.current = setTimeout(() => {
-        setDisplayLevel(1);
-        setIdleTimer(); // Reset idle timer when reaching level 1
+      // Schedule level 2 (page info) after 200ms
+      level2Timer.current = setTimeout(() => {
+        setDisplayLevel(2);
+      }, 200);
 
-        // Level 1 -> 2: 1s after reaching level 1
-        mouseHoverTimer.current = setTimeout(() => {
-          setDisplayLevel(2);
-          setIdleTimer(); // Reset idle timer when reaching level 2
-
-          // Level 2 -> 3: 2s after reaching level 2
-          mouseHoverTimer.current = setTimeout(() => {
-            setDisplayLevel(3);
-            setIdleTimer(); // Reset idle timer when reaching level 3
-          }, 2000);
-        }, 1000);
+      // Schedule level 3 (controls) after 500ms
+      level3Timer.current = setTimeout(() => {
+        setDisplayLevel(3);
       }, 500);
 
-      // Set initial idle timer
-      setIdleTimer();
+      // Set idle timer to return to level 0 after 3s
+      mouseIdleTimer.current = setTimeout(() => {
+        setDisplayLevel(0);
+      }, 3000);
     };
 
     window.addEventListener("mousemove", handleMouseMove);
 
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
-      clearTimers();
+      if (mouseIdleTimer.current) {
+        clearTimeout(mouseIdleTimer.current);
+      }
+      if (level2Timer.current) {
+        clearTimeout(level2Timer.current);
+      }
+      if (level3Timer.current) {
+        clearTimeout(level3Timer.current);
+      }
     };
   }, []);
 
@@ -322,6 +310,13 @@ function App() {
 
             {sceneInfo && (
               <>
+                {/* Level 1+: Scene name */}
+                {displayLevel >= 1 && (
+                  <div className="scene-info fade-in">
+                    <div>{sceneInfo.scene_name}</div>
+                  </div>
+                )}
+
                 {/* Level 2+: Page number */}
                 {displayLevel >= 2 && (
                   <div className="info-overlay fade-in">
@@ -329,21 +324,17 @@ function App() {
                   </div>
                 )}
 
+                {/* Level 2+: Total pages */}
+                {displayLevel >= 2 && (
+                  <div className="scene-info fade-in">
+                    <div>Total Pages: {sceneInfo.total_pages}</div>
+                  </div>
+                )}
+
                 {/* Level 2+: Image filename */}
                 {displayLevel >= 2 && (
                   <div className="page-info fade-in">
                     {imageData.image_path.split(/[/\\]/).pop()}
-                  </div>
-                )}
-
-                {/* Level 1+: Scene name */}
-                {displayLevel >= 1 && (
-                  <div className="scene-info fade-in">
-                    <div>{sceneInfo.scene_name}</div>
-                    {/* Level 2+: Total pages */}
-                    {displayLevel >= 2 && (
-                      <div>Total Pages: {sceneInfo.total_pages}</div>
-                    )}
                   </div>
                 )}
               </>
