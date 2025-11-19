@@ -1,9 +1,9 @@
-import { useEffect } from "react";
 import { useNotification } from "./framework/hooks/useNotification";
 import { Notification } from "./framework/components/Notification";
 import { useAutoPlay } from "./framework/hooks/useAutoPlay";
 import { AutoPlayControls } from "./framework/components/AutoPlayControls";
 import { useDisplayLevel } from "./framework/hooks/useDisplayLevel";
+import { useKeyboard } from "./framework/hooks/useKeyboard";
 import { useImageContent } from "./features/image-viewer/hooks/useImageContent";
 import "./App.css";
 
@@ -37,41 +37,39 @@ function App() {
   const { notification, showNotification } = useNotification();
 
   // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      console.log("Key pressed:", e.key);
-      switch (e.key) {
-        case "ArrowLeft":
-        case "ArrowUp":
-          console.log("Triggering prev page from keyboard");
-          autoPlay.pause(1000); // Pause auto-play when user navigates manually
-          handlePrevPage();
-          break;
-        case "ArrowRight":
-        case "ArrowDown":
-          console.log("Triggering next page from keyboard");
-          autoPlay.pause(1000); // Pause auto-play when user navigates manually
-          handleNextPage();
-          break;
-        case " ":
-          e.preventDefault();
-          console.log("Toggling autoplay");
-          autoPlay.togglePlay();
-          showNotification(autoPlay.isPlaying ? "Auto-play OFF" : "Auto-play ON");
-          break;
-        case "Escape":
-          // Handle fullscreen exit if implemented
-          break;
-      }
-    };
-
-    console.log("Setting up keyboard event listener");
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      console.log("Removing keyboard event listener");
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [handleNextPage, handlePrevPage, autoPlay, showNotification]);
+  useKeyboard({
+    keyMap: {
+      "ArrowLeft": () => {
+        console.log("Triggering prev page from keyboard");
+        autoPlay.pause(1000);
+        handlePrevPage();
+      },
+      "ArrowUp": () => {
+        console.log("Triggering prev page from keyboard");
+        autoPlay.pause(1000);
+        handlePrevPage();
+      },
+      "ArrowRight": () => {
+        console.log("Triggering next page from keyboard");
+        autoPlay.pause(1000);
+        handleNextPage();
+      },
+      "ArrowDown": () => {
+        console.log("Triggering next page from keyboard");
+        autoPlay.pause(1000);
+        handleNextPage();
+      },
+      " ": (e) => {
+        e.preventDefault();
+        console.log("Toggling autoplay");
+        autoPlay.togglePlay();
+        showNotification(autoPlay.isPlaying ? "Auto-play OFF" : "Auto-play ON");
+      },
+      "Escape": () => {
+        // Handle fullscreen exit if implemented
+      },
+    },
+  });
 
   return (
     <div className={`app ${displayLevel === 0 ? "hide-cursor" : ""}`}>
