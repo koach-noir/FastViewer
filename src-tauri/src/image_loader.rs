@@ -55,6 +55,48 @@ impl ImageCache {
     }
 }
 
+/// Cache for base64-encoded images
+pub struct EncodedImageCache {
+    cache: Arc<Mutex<HashMap<String, String>>>,
+    max_size: usize,
+}
+
+impl EncodedImageCache {
+    pub fn new(max_size: usize) -> Self {
+        EncodedImageCache {
+            cache: Arc::new(Mutex::new(HashMap::new())),
+            max_size,
+        }
+    }
+
+    /// Get an encoded image from cache
+    pub fn get(&self, path: &str) -> Option<String> {
+        self.cache.lock().unwrap().get(path).cloned()
+    }
+
+    /// Insert an encoded image into the cache
+    pub fn insert(&self, path: String, encoded: String) {
+        let mut cache = self.cache.lock().unwrap();
+
+        // Simple eviction: if cache is full, clear it
+        if cache.len() >= self.max_size {
+            cache.clear();
+        }
+
+        cache.insert(path, encoded);
+    }
+
+    /// Clear the entire cache
+    pub fn clear(&self) {
+        self.cache.lock().unwrap().clear();
+    }
+
+    /// Get current cache size
+    pub fn size(&self) -> usize {
+        self.cache.lock().unwrap().len()
+    }
+}
+
 /// Load an image from a file path
 pub fn load_image<P: AsRef<Path>>(path: P) -> Result<DynamicImage> {
     let path = path.as_ref();
