@@ -135,6 +135,17 @@ function App() {
       }
     };
 
+    const setIdleTimer = () => {
+      // Clear existing idle timer
+      if (mouseIdleTimer.current) {
+        clearTimeout(mouseIdleTimer.current);
+      }
+      // Set idle timer to return to level 0 after 4s
+      mouseIdleTimer.current = setTimeout(() => {
+        setDisplayLevel(0);
+      }, 4000);
+    };
+
     const handleMouseMove = () => {
       lastMouseMoveTime.current = Date.now();
 
@@ -145,22 +156,23 @@ function App() {
       // Level 0 -> 1: 0.5s
       mouseHoverTimer.current = setTimeout(() => {
         setDisplayLevel(1);
+        setIdleTimer(); // Reset idle timer when reaching level 1
 
         // Level 1 -> 2: 1s after reaching level 1
         mouseHoverTimer.current = setTimeout(() => {
           setDisplayLevel(2);
+          setIdleTimer(); // Reset idle timer when reaching level 2
 
           // Level 2 -> 3: 2s after reaching level 2
           mouseHoverTimer.current = setTimeout(() => {
             setDisplayLevel(3);
+            setIdleTimer(); // Reset idle timer when reaching level 3
           }, 2000);
         }, 1000);
       }, 500);
 
-      // Set idle timer to return to level 0 after 4s of no mouse movement
-      mouseIdleTimer.current = setTimeout(() => {
-        setDisplayLevel(0);
-      }, 4000);
+      // Set initial idle timer
+      setIdleTimer();
     };
 
     window.addEventListener("mousemove", handleMouseMove);
