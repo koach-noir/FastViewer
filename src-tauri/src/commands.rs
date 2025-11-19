@@ -13,6 +13,7 @@ pub struct AppState {
     pub current_collection: Arc<Mutex<Option<SceneCollection>>>,
     pub current_scene_index: Arc<Mutex<usize>>,
     pub current_page_index: Arc<Mutex<usize>>,
+    pub scene_loop_enabled: Arc<Mutex<bool>>,
 }
 
 impl AppState {
@@ -24,6 +25,7 @@ impl AppState {
             current_collection: Arc::new(Mutex::new(None)),
             current_scene_index: Arc::new(Mutex::new(0)),
             current_page_index: Arc::new(Mutex::new(0)),
+            scene_loop_enabled: Arc::new(Mutex::new(true)), // Default ON (existing behavior)
         }
     }
 }
@@ -223,7 +225,9 @@ pub async fn get_image(
 #[tauri::command]
 pub async fn next_page(state: State<'_, AppState>) -> Result<ImageData, String> {
     println!("=== next_page command called ===");
-    let (scene_index, new_page) = {
+    let scene_loop_enabled = *state.scene_loop_enabled.lock().unwrap();
+
+    let (mut scene_index, new_page, scene_changed) = {
         let scene = state.current_scene.lock().unwrap();
         let page_index = state.current_page_index.lock().unwrap();
         let scene_index = *state.current_scene_index.lock().unwrap();
@@ -231,14 +235,48 @@ pub async fn next_page(state: State<'_, AppState>) -> Result<ImageData, String> 
         if let Some(scene) = scene.as_ref() {
             let current_page = *page_index;
             let total_pages = scene.page_count();
-            let new_page = (current_page + 1) % total_pages;
-            println!("Current page: {}, Total pages: {}, New page: {}", current_page, total_pages, new_page);
-            (scene_index, new_page)
+
+            if scene_loop_enabled {
+                // Existing behavior: loop within scene
+                let new_page = (current_page + 1) % total_pages;
+                println!("Loop enabled - Current page: {}, Total pages: {}, New page: {}", current_page, total_pages, new_page);
+                (scene_index, new_page, false)
+            } else {
+                // New behavior: transition to next scene at boundary
+                if current_page + 1 >= total_pages {
+                    // At last page, move to next scene
+                    println!("At last page, moving to next scene");
+                    (scene_index, 0, true)
+                } else {
+                    let new_page = current_page + 1;
+                    println!("Normal navigation - Current page: {}, Total pages: {}, New page: {}", current_page, total_pages, new_page);
+                    (scene_index, new_page, false)
+                }
+            }
         } else {
             println!("ERROR: No scene loaded");
             return Err("No scene loaded".to_string());
         }
     };
+
+    // Handle scene transition if needed
+    if scene_changed {
+        let collection = state.current_collection.lock().unwrap();
+        let mut scene_idx = state.current_scene_index.lock().unwrap();
+
+        if let Some(coll) = collection.as_ref() {
+            let new_scene_idx = (scene_index + 1) % coll.scene_count();
+            let scene = coll.load_scene(new_scene_idx)
+                .map_err(|e| format!("Failed to load next scene: {}", e))?;
+
+            *state.current_scene.lock().unwrap() = Some(scene);
+            *scene_idx = new_scene_idx;
+            scene_index = new_scene_idx;
+            println!("Loaded next scene: {}", new_scene_idx);
+        } else {
+            return Err("No collection loaded".to_string());
+        }
+    }
 
     println!("Calling get_image with scene_index: {}, page: {}", scene_index, new_page);
     let result = get_image(Some(scene_index), new_page, state.clone()).await;
@@ -264,7 +302,9 @@ pub async fn next_page(state: State<'_, AppState>) -> Result<ImageData, String> 
 #[tauri::command]
 pub async fn prev_page(state: State<'_, AppState>) -> Result<ImageData, String> {
     println!("=== prev_page command called ===");
-    let (scene_index, new_page) = {
+    let scene_loop_enabled = *state.scene_loop_enabled.lock().unwrap();
+
+    let (mut scene_index, new_page, scene_changed) = {
         let scene = state.current_scene.lock().unwrap();
         let page_index = state.current_page_index.lock().unwrap();
         let scene_index = *state.current_scene_index.lock().unwrap();
@@ -272,21 +312,64 @@ pub async fn prev_page(state: State<'_, AppState>) -> Result<ImageData, String> 
         if let Some(scene) = scene.as_ref() {
             let current_page = *page_index;
             let total_pages = scene.page_count();
-            let new_page = if current_page == 0 {
-                total_pages - 1
+
+            if scene_loop_enabled {
+                // Existing behavior: loop within scene
+                let new_page = if current_page == 0 {
+                    total_pages - 1
+                } else {
+                    current_page - 1
+                };
+                println!("Loop enabled - Current page: {}, Total pages: {}, New page: {}", current_page, total_pages, new_page);
+                (scene_index, new_page, false)
             } else {
-                current_page - 1
-            };
-            println!("Current page: {}, Total pages: {}, New page: {}", current_page, total_pages, new_page);
-            (scene_index, new_page)
+                // New behavior: transition to previous scene at boundary
+                if current_page == 0 {
+                    // At first page, move to previous scene (will load last page of that scene)
+                    println!("At first page, moving to previous scene");
+                    (scene_index, 0, true) // Placeholder page, will be updated after loading scene
+                } else {
+                    let new_page = current_page - 1;
+                    println!("Normal navigation - Current page: {}, Total pages: {}, New page: {}", current_page, total_pages, new_page);
+                    (scene_index, new_page, false)
+                }
+            }
         } else {
             println!("ERROR: No scene loaded");
             return Err("No scene loaded".to_string());
         }
     };
 
-    println!("Calling get_image with scene_index: {}, page: {}", scene_index, new_page);
-    let result = get_image(Some(scene_index), new_page, state.clone()).await;
+    // Handle scene transition if needed
+    let mut final_page = new_page;
+    if scene_changed {
+        let collection = state.current_collection.lock().unwrap();
+        let mut scene_idx = state.current_scene_index.lock().unwrap();
+
+        if let Some(coll) = collection.as_ref() {
+            let new_scene_idx = if scene_index == 0 {
+                coll.scene_count() - 1
+            } else {
+                scene_index - 1
+            };
+
+            let scene = coll.load_scene(new_scene_idx)
+                .map_err(|e| format!("Failed to load previous scene: {}", e))?;
+
+            // Get the last page of the previous scene
+            final_page = scene.page_count().saturating_sub(1);
+
+            *state.current_scene.lock().unwrap() = Some(scene);
+            *scene_idx = new_scene_idx;
+            scene_index = new_scene_idx;
+            println!("Loaded previous scene: {}, last page: {}", new_scene_idx, final_page);
+        } else {
+            return Err("No collection loaded".to_string());
+        }
+    }
+
+    println!("Calling get_image with scene_index: {}, page: {}", scene_index, final_page);
+    let result = get_image(Some(scene_index), final_page, state.clone()).await;
 
     // Preload next images in background (don't wait for completion)
     if result.is_ok() {
@@ -440,4 +523,17 @@ pub async fn prev_scene(state: State<'_, AppState>) -> Result<SceneInfo, String>
     }
 
     get_scene_info(state).await
+}
+
+/// Get scene loop enabled state
+#[tauri::command]
+pub async fn get_scene_loop_enabled(state: State<'_, AppState>) -> Result<bool, String> {
+    Ok(*state.scene_loop_enabled.lock().unwrap())
+}
+
+/// Set scene loop enabled state
+#[tauri::command]
+pub async fn set_scene_loop_enabled(enabled: bool, state: State<'_, AppState>) -> Result<(), String> {
+    *state.scene_loop_enabled.lock().unwrap() = enabled;
+    Ok(())
 }

@@ -5,6 +5,7 @@ mod commands;
 use commands::{
     AppState, load_scene_collection, get_scene_info, get_image,
     next_page, prev_page, get_scene_list, next_scene, prev_scene,
+    get_scene_loop_enabled, set_scene_loop_enabled,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -23,6 +24,8 @@ pub fn run() {
             get_scene_list,
             next_scene,
             prev_scene,
+            get_scene_loop_enabled,
+            set_scene_loop_enabled,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
