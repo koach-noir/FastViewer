@@ -11,8 +11,10 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [autoPlay, setAutoPlay] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0); // 0.5x to 3.0x speed
-  const [sceneLoopEnabled, setSceneLoopEnabled] = useState(true);
+  const [autoPlayReverse, setAutoPlayReverse] = useState(false); // Auto-play direction toggle
+  const [sceneLoopEnabled, setSceneLoopEnabled] = useState(false);
   const isNavigating = useRef(false);
+  const autoPlayPausedUntil = useRef<number>(0); // Timestamp until which auto-play is paused
 
   // Display level state (0: image only, 1: +scene name, 2: +page info, 3: +controls)
   const [displayLevel, setDisplayLevel] = useState(0);
@@ -61,6 +63,11 @@ function App() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  // Pause auto-play for 1 second when user manually navigates
+  const pauseAutoPlay = useCallback(() => {
+    autoPlayPausedUntil.current = Date.now() + 1000; // Pause for 1 second
   }, []);
 
   const handleNextPage = useCallback(async () => {
@@ -146,17 +153,28 @@ function App() {
     }
   };
 
-  // Auto play functionality
+  // Auto play functionality with idling and reverse support
   useEffect(() => {
     if (!autoPlay) return;
 
     const baseInterval = 2400; // 2.4 seconds base interval
     const interval = setInterval(() => {
-      handleNextPage();
+      // Check if auto-play is currently paused
+      if (Date.now() < autoPlayPausedUntil.current) {
+        console.log("Auto-play paused, skipping navigation");
+        return;
+      }
+
+      // Navigate in the appropriate direction
+      if (autoPlayReverse) {
+        handlePrevPage();
+      } else {
+        handleNextPage();
+      }
     }, baseInterval / playbackSpeed);
 
     return () => clearInterval(interval);
-  }, [autoPlay, playbackSpeed, handleNextPage]);
+  }, [autoPlay, playbackSpeed, autoPlayReverse, handleNextPage, handlePrevPage]);
 
   // Scene change detection: transition from level 0 to level 1
   useEffect(() => {
@@ -274,11 +292,13 @@ function App() {
         case "ArrowLeft":
         case "ArrowUp":
           console.log("Triggering prev page from keyboard");
+          pauseAutoPlay(); // Pause auto-play when user navigates manually
           handlePrevPage();
           break;
         case "ArrowRight":
         case "ArrowDown":
           console.log("Triggering next page from keyboard");
+          pauseAutoPlay(); // Pause auto-play when user navigates manually
           handleNextPage();
           break;
         case " ":
@@ -298,7 +318,7 @@ function App() {
       console.log("Removing keyboard event listener");
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [handleNextPage, handlePrevPage]);
+  }, [handleNextPage, handlePrevPage, pauseAutoPlay]);
 
   const handleNextScene = async () => {
     try {
@@ -393,6 +413,7 @@ function App() {
                   className="nav-button"
                   onClick={() => {
                     console.log("Prev Page button clicked");
+                    pauseAutoPlay(); // Pause auto-play when user navigates manually
                     handlePrevPage();
                   }}
                 >
@@ -402,6 +423,7 @@ function App() {
                   className="nav-button"
                   onClick={() => {
                     console.log("Next Page button clicked");
+                    pauseAutoPlay(); // Pause auto-play when user navigates manually
                     handleNextPage();
                   }}
                 >
@@ -436,6 +458,15 @@ function App() {
                     onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))}
                     className="speed-slider"
                   />
+                </div>
+                <div className="direction-control">
+                  <button
+                    className={`direction-button ${autoPlayReverse ? "active" : ""}`}
+                    onClick={() => setAutoPlayReverse((prev) => !prev)}
+                    title={autoPlayReverse ? "Direction: Backward (◀)" : "Direction: Forward (▶)"}
+                  >
+                    {autoPlayReverse ? "◀ Backward" : "▶ Forward"}
+                  </button>
                 </div>
               </div>
             )}
