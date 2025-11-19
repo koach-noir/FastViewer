@@ -11,49 +11,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [autoPlay, setAutoPlay] = useState(false);
 
-  // Load initial scene
-  useEffect(() => {
-    loadInitialScene();
-  }, []);
-
-  // Auto play functionality
-  useEffect(() => {
-    if (!autoPlay) return;
-
-    const interval = setInterval(() => {
-      handleNextPage();
-    }, 2400); // 2.4 seconds like the original
-
-    return () => clearInterval(interval);
-  }, [autoPlay]);
-
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      switch (e.key) {
-        case "ArrowLeft":
-        case "ArrowUp":
-          handlePrevPage();
-          break;
-        case "ArrowRight":
-        case "ArrowDown":
-          handleNextPage();
-          break;
-        case " ":
-          e.preventDefault();
-          setAutoPlay((prev) => !prev);
-          break;
-        case "Escape":
-          // Handle fullscreen exit if implemented
-          break;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  const loadInitialScene = async () => {
+  const loadInitialScene = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -87,7 +45,7 @@ function App() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const handleNextPage = useCallback(async () => {
     try {
@@ -112,6 +70,48 @@ function App() {
       console.error("Failed to navigate to previous page:", err);
     }
   }, []);
+
+  // Load initial scene
+  useEffect(() => {
+    loadInitialScene();
+  }, [loadInitialScene]);
+
+  // Auto play functionality
+  useEffect(() => {
+    if (!autoPlay) return;
+
+    const interval = setInterval(() => {
+      handleNextPage();
+    }, 2400); // 2.4 seconds like the original
+
+    return () => clearInterval(interval);
+  }, [autoPlay, handleNextPage]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      switch (e.key) {
+        case "ArrowLeft":
+        case "ArrowUp":
+          handlePrevPage();
+          break;
+        case "ArrowRight":
+        case "ArrowDown":
+          handleNextPage();
+          break;
+        case " ":
+          e.preventDefault();
+          setAutoPlay((prev) => !prev);
+          break;
+        case "Escape":
+          // Handle fullscreen exit if implemented
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleNextPage, handlePrevPage]);
 
   const handleNextScene = async () => {
     try {
