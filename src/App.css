@@ -270,6 +270,33 @@ body, html, #root {
   transform: scale(1.2);
 }
 
+/* Direction Control */
+.direction-control {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.direction-button {
+  padding: 8px 16px;
+  background-color: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: all 0.2s;
+}
+
+.direction-button:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+.direction-button.active {
+  background-color: rgba(255, 152, 0, 0.5);
+  border-color: rgba(255, 152, 0, 0.8);
+}
+
 /* Scene Loop Control */
 .scene-loop-control {
   position: absolute;
