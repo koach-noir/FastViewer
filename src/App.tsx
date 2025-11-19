@@ -188,7 +188,7 @@ function App() {
         const timeSinceMouseDown = Date.now() - lastMouseDownLevel.current.timestamp;
         const levelToCheck = timeSinceMouseDown < 500
           ? lastMouseDownLevel.current.level
-          : displayLevel;
+          : displayLevelRef.current;
 
         // Scene changed - if at level 0, transition to level 1
         if (levelToCheck === 0) {
@@ -206,7 +206,7 @@ function App() {
       // Update previous scene index
       previousSceneIndex.current = sceneInfo.scene_index;
     }
-  }, [sceneInfo, displayLevel]);
+  }, [sceneInfo]);
 
   // Mouse hover and idle detection for display level control
   useEffect(() => {
