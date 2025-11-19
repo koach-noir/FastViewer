@@ -10,6 +10,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [autoPlay, setAutoPlay] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1.0); // 0.5x to 3.0x speed
   const [sceneLoopEnabled, setSceneLoopEnabled] = useState(true);
   const isNavigating = useRef(false);
 
@@ -149,12 +150,13 @@ function App() {
   useEffect(() => {
     if (!autoPlay) return;
 
+    const baseInterval = 2400; // 2.4 seconds base interval
     const interval = setInterval(() => {
       handleNextPage();
-    }, 2400); // 2.4 seconds like the original
+    }, baseInterval / playbackSpeed);
 
     return () => clearInterval(interval);
-  }, [autoPlay, handleNextPage]);
+  }, [autoPlay, playbackSpeed, handleNextPage]);
 
   // Scene change detection: transition from level 0 to level 1
   useEffect(() => {
@@ -420,6 +422,21 @@ function App() {
                 >
                   {autoPlay ? "⏸ Pause" : "▶ Play"}
                 </button>
+                <div className="speed-control">
+                  <label htmlFor="speed-slider">
+                    Speed: {playbackSpeed.toFixed(1)}x
+                  </label>
+                  <input
+                    id="speed-slider"
+                    type="range"
+                    min="0.5"
+                    max="3.0"
+                    step="0.1"
+                    value={playbackSpeed}
+                    onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))}
+                    className="speed-slider"
+                  />
+                </div>
               </div>
             )}
 
