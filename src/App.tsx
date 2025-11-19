@@ -4,12 +4,10 @@ import { useAutoPlay } from "./framework/hooks/useAutoPlay";
 import { AutoPlayControls } from "./framework/components/AutoPlayControls";
 import { useDisplayLevel } from "./framework/hooks/useDisplayLevel";
 import { useKeyboard } from "./framework/hooks/useKeyboard";
-import { NavigationButtons } from "./framework/components/NavigationButtons";
 import { LoopControl } from "./framework/components/LoopControl";
 import { useImageContent } from "./features/image-viewer/hooks/useImageContent";
 import { ImageDisplay } from "./features/image-viewer/components/ImageDisplay";
 import { ImageInfo } from "./features/image-viewer/components/ImageInfo";
-import { SceneNavigation } from "./features/image-viewer/components/SceneNavigation";
 import "./App.css";
 
 function App() {
@@ -93,25 +91,35 @@ function App() {
               displayLevel={displayLevel}
             />
 
-            <SceneNavigation
-              displayLevel={displayLevel}
-              onPrevScene={handlePrevScene}
-              onNextScene={handleNextScene}
-            />
-
-            <NavigationButtons
-              displayLevel={displayLevel}
-              onPrev={() => {
-                console.log("Prev Page button clicked");
-                autoPlay.pause(1000);
-                handlePrevPage();
-              }}
-              onNext={() => {
-                console.log("Next Page button clicked");
-                autoPlay.pause(1000);
-                handleNextPage();
-              }}
-            />
+            {/* Level 3: Navigation controls */}
+            <div className={`navigation-controls ui-element ${displayLevel >= 3 ? "visible" : ""}`}>
+              <button className="nav-button" onClick={handlePrevScene}>
+                &lt;&lt; Prev Scene
+              </button>
+              <button
+                className="nav-button"
+                onClick={() => {
+                  console.log("Prev Page button clicked");
+                  autoPlay.pause(1000);
+                  handlePrevPage();
+                }}
+              >
+                &lt; Prev
+              </button>
+              <button
+                className="nav-button"
+                onClick={() => {
+                  console.log("Next Page button clicked");
+                  autoPlay.pause(1000);
+                  handleNextPage();
+                }}
+              >
+                Next &gt;
+              </button>
+              <button className="nav-button" onClick={handleNextScene}>
+                Next Scene &gt;&gt;
+              </button>
+            </div>
 
             <AutoPlayControls
               isPlaying={autoPlay.isPlaying}
